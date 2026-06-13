@@ -57,6 +57,18 @@ public final class MainActivity extends Activity {
         public long getCachedWeatherAt() {
             return preferences.getLong("cached_weather_at", 0L);
         }
+
+        @JavascriptInterface
+        public void cacheAccent(String accent) {
+            if (accent != null && accent.matches("^#[0-9a-fA-F]{6}$")) {
+                preferences.edit().putString("cached_accent", accent).apply();
+            }
+        }
+
+        @JavascriptInterface
+        public String getCachedAccent() {
+            return preferences.getString("cached_accent", "#b7f34a");
+        }
     }
 
     private final Runnable connectionProbe = new Runnable() {

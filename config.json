@@ -1,15 +1,15 @@
 {
   "port": 8765,
   "title": "ENDO DECK",
-  "accent": "#b7f34a",
+  "accent": "#a358fe",
   "ui": {
     "dimAfterSeconds": 90,
     "screensaverAfterSeconds": 300
   },
   "weather": {
-    "city": "Warszawa",
-    "latitude": 52.2297,
-    "longitude": 21.0122
+    "city": "Szczecin",
+    "latitude": 53.42894,
+    "longitude": 14.55302
   },
   "pages": {
     "home": {

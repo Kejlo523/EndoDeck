@@ -29,11 +29,17 @@ function publish() {
   for (const client of clients) client.write(payload);
 }
 
+function publishConfig() {
+  const payload = `event: config\ndata: ${JSON.stringify(config)}\n\n`;
+  for (const client of clients) client.write(payload);
+}
+
 async function refreshConfig() {
   const nextMtime = (await stat(configPath)).mtimeMs;
   if (nextMtime === configMtime) return;
   config = JSON.parse(await readFile(configPath, "utf8"));
   configMtime = nextMtime;
+  publishConfig();
 }
 
 function validateConfig(nextConfig) {
@@ -89,6 +95,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "PUT" && url.pathname === "/api/config") {
       const nextConfig = await bodyJson(request);
       await saveConfig(nextConfig);
+      publishConfig();
       return sendJson(response, 200, { ok: true, config });
     }
     if (request.method === "GET" && url.pathname === "/api/state") return sendJson(response, 200, state);
@@ -117,6 +124,7 @@ const server = createServer(async (request, response) => {
       response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
       clients.add(response);
       response.write(`data: ${JSON.stringify(state)}\n\n`);
+      response.write(`event: config\ndata: ${JSON.stringify(config)}\n\n`);
       request.on("close", () => clients.delete(response));
       return;
     }

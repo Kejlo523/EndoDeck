@@ -13,6 +13,7 @@ Lokalny Stream Deck z telefonu Huawei P8 Lite, sterowany przez USB i `adb revers
 - pasek stanu z połączeniem USB, prądem baterii i poziomem naładowania
 - krótki komunikat o niedostępnym PC, a następnie lokalny wygaszacz z pogodą zapisaną w cache telefonu
 - obniżenie jasności przez natywne API Androida oraz okresowe przesuwanie i zamianę elementów wygaszacza
+- natychmiastowa synchronizacja koloru ze Studio oraz adaptacyjna jasność wygaszacza zależna od wschodu i zachodu słońca
 - moduły Magisk do uśpienia po odłączeniu, wyłączenia radia, DT2W i usunięcia blokady
 - dwuczęściowa obudowa P8 Lite gotowa do druku 3D
 

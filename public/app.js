@@ -21,6 +21,7 @@ let inactivityTimer;
 let screensaverTimer;
 let burnInTimer;
 let screensaverActive = false;
+let latestWeather;
 
 function showToast(message, error = false) {
   clearTimeout(toastTimer);
@@ -196,13 +197,53 @@ function renderWeather(weather) {
   $("#forecast").innerHTML = weather.daily.map((day) => { const date = new Date(`${day.date}T12:00:00`); const [, daySymbol] = weatherInfo(day.code); return `<div class="forecast-day"><b>${new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date)}</b><span>${daySymbol}</span><strong>${day.max}°</strong><small>${day.min}° · ${day.rain}%</small></div>`; }).join("");
 }
 
+function cacheAccent(accent) {
+  try { window.NativeDeck?.cacheAccent(accent); } catch { }
+}
+
+function applyConfig(nextConfig, resetTimers = true) {
+  config = nextConfig;
+  if (!config.pages[currentPage]) currentPage = "home";
+  document.documentElement.style.setProperty("--accent", config.accent);
+  $("#deck-title").textContent = config.title;
+  cacheAccent(config.accent);
+  render(currentPage);
+  if (resetTimers) resetIdle();
+}
+
+function cityTime(weather) {
+  const shifted = new Date(Date.now() + Number(weather?.utcOffsetSeconds ?? 0) * 1000);
+  return {
+    date: shifted.toISOString().slice(0, 10),
+    minute: shifted.getUTCHours() * 60 + shifted.getUTCMinutes()
+  };
+}
+
+function eventMinute(value) {
+  const match = String(value ?? "").match(/T(\d{2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+function screensaverBrightness(weather, offline = false) {
+  const { date, minute } = cityTime(weather);
+  const today = weather?.daily?.find((day) => day.date === date) ?? weather?.daily?.[0];
+  const sunrise = eventMinute(today?.sunrise);
+  const sunset = eventMinute(today?.sunset);
+  const levels = offline ? { night: .052, day: .060, twilight: .068 } : { night: .062, day: .070, twilight: .078 };
+  if (sunrise === null || sunset === null) return levels.night;
+  if (Math.abs(minute - sunrise) <= 45 || Math.abs(minute - sunset) <= 45) return levels.twilight;
+  return minute > sunrise && minute < sunset ? levels.day : levels.night;
+}
+
 async function loadWeather() {
   try {
     const response = await fetch("/api/weather");
     if (!response.ok) return;
     const weather = await response.json();
+    latestWeather = weather;
     renderWeather(weather);
     try { window.NativeDeck?.cacheWeather(JSON.stringify(weather)); } catch { }
+    if (screensaverActive) setDeckBrightness(screensaverBrightness(weather));
   } catch { }
 }
 
@@ -227,7 +268,7 @@ function showScreensaver() {
   burnInTimer = setInterval(rotateScreensaver, 60_000);
   screensaver.classList.remove("hidden");
   screensaver.setAttribute("aria-hidden", "false");
-  setDeckBrightness(.062);
+  setDeckBrightness(screensaverBrightness(latestWeather));
   loadWeather();
 }
 function resetIdle() {
@@ -240,10 +281,11 @@ function resetIdle() {
 }
 
 async function boot() {
-  config = await fetch("/api/config").then((response) => response.json());
-  document.documentElement.style.setProperty("--accent", config.accent); $("#deck-title").textContent = config.title; $("#settings-trigger").innerHTML = iconSvg("gear");
-  render("home"); updateState(await fetch("/api/state").then((response) => response.json())); updateClock(); loadWeather(); resetIdle();
+  applyConfig(await fetch("/api/config").then((response) => response.json()), false);
+  $("#settings-trigger").innerHTML = iconSvg("gear");
+  updateState(await fetch("/api/state").then((response) => response.json())); updateClock(); loadWeather(); resetIdle();
   const events = new EventSource("/api/events"); events.addEventListener("message", (event) => updateState(JSON.parse(event.data)));
+  events.addEventListener("config", (event) => applyConfig(JSON.parse(event.data)));
   setInterval(updateClock, 1000); setInterval(loadWeather, 15 * 60_000);
   for (const event of ["pointerdown", "touchstart", "keydown"]) document.addEventListener(event, resetIdle, { passive: true });
 }

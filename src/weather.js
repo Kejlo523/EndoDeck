@@ -30,6 +30,7 @@ export async function getWeather(settings = {}) {
   const data = {
     city,
     timezone: raw.timezone,
+    utcOffsetSeconds: raw.utc_offset_seconds ?? 0,
     current: {
       temperature: Math.round(raw.current.temperature_2m),
       apparent: Math.round(raw.current.apparent_temperature),
