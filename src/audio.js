@@ -33,3 +33,8 @@ export function getAudioStatus() {
 export function toggleMicrophoneMute() {
   return run(["-Action", "microphone-toggle"]);
 }
+
+export async function toggleProcessMute(processName) {
+  const result = await run(["-Action", "process-toggle", "-ProcessName", String(processName)]);
+  return result.available ? result : { ...result, message: `${processName} nie ma teraz aktywnej sesji audio` };
+}

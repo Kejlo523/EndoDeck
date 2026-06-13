@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { toggleMicrophoneMute } from "./audio.js";
+import { toggleMicrophoneMute, toggleProcessMute } from "./audio.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -96,6 +96,8 @@ export async function executeAction(action, context) {
       return {};
     case "microphoneMute":
       return toggleMicrophoneMute();
+    case "processAudioMute":
+      return toggleProcessMute(action.process);
     case "launch": {
       const child = spawn(action.command, action.args ?? [], { detached: true, stdio: "ignore", windowsHide: false });
       child.unref();

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { getAudioStatus } from "./audio.js";
+import { getAudioSnapshot } from "./audio.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -27,7 +27,7 @@ async function runningProcesses() {
 export async function getControlStates(config) {
   const [processes, audio] = await Promise.all([
     runningProcesses().catch(() => new Set()),
-    getAudioStatus().catch(() => ({ muted: false, microphoneMuted: false }))
+    getAudioSnapshot().catch(() => ({ muted: false, microphoneMuted: false, sessions: [] }))
   ]);
   const wanted = configuredProcesses(config);
   const processState = Object.fromEntries([...wanted].map((name) => [name, processes.has(name)]));
@@ -40,6 +40,11 @@ export async function getControlStates(config) {
       if (status.type === "process") controls[button.id] = { active: Boolean(processState[String(status.process).toLowerCase()]), source: "process" };
       if (status.type === "microphoneMute") controls[button.id] = { active: Boolean(audio.microphoneMuted), source: "windows-audio" };
       if (status.type === "masterMute") controls[button.id] = { active: Boolean(audio.muted), source: "windows-audio" };
+      if (status.type === "processAudioMute") {
+        const processName = String(status.process).toLowerCase();
+        const sessions = (audio.sessions ?? []).filter((session) => String(session.process).toLowerCase() === processName);
+        controls[button.id] = { active: sessions.length > 0 && sessions.every((session) => session.muted), available: sessions.length > 0, source: "windows-audio" };
+      }
     }
   }
   return controls;

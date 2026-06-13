@@ -1,8 +1,9 @@
 param(
-    [ValidateSet('list', 'status', 'master', 'session', 'microphone-toggle')]
+    [ValidateSet('list', 'status', 'master', 'session', 'microphone-toggle', 'process-toggle')]
     [string]$Action = 'list',
     [int]$Volume = 50,
-    [int]$SessionId = -1
+    [int]$SessionId = -1,
+    [string]$ProcessName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,6 +125,11 @@ namespace EndoDeck {
         public bool microphoneMuted;
     }
 
+    public sealed class ProcessAudioStatus {
+        public bool available;
+        public bool muted;
+    }
+
     public static class Audio {
         private static IMMDevice DefaultDevice(EDataFlow flow = EDataFlow.Render, ERole role = ERole.Multimedia) {
             var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
@@ -222,6 +228,39 @@ namespace EndoDeck {
             return !muted;
         }
 
+        public static ProcessAudioStatus ToggleProcess(string processName) {
+            var manager = Activate<IAudioSessionManager2>(DefaultDevice(), "77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+            IAudioSessionEnumerator sessionEnum;
+            Marshal.ThrowExceptionForHR(manager.GetSessionEnumerator(out sessionEnum));
+            int count;
+            sessionEnum.GetCount(out count);
+            var matches = new List<ISimpleAudioVolume>();
+            bool allMuted = true;
+
+            for (int i = 0; i < count; i++) {
+                IAudioSessionControl control;
+                if (sessionEnum.GetSession(i, out control) != 0 || control == null) continue;
+                var control2 = (IAudioSessionControl2)control;
+                uint pid;
+                control2.GetProcessId(out pid);
+                if (pid == 0) continue;
+                try {
+                    var process = Process.GetProcessById((int)pid);
+                    if (!String.Equals(process.ProcessName, processName, StringComparison.OrdinalIgnoreCase)) continue;
+                    var simple = (ISimpleAudioVolume)control;
+                    bool muted;
+                    simple.GetMute(out muted);
+                    allMuted = allMuted && muted;
+                    matches.Add(simple);
+                } catch { }
+            }
+
+            if (matches.Count == 0) return new ProcessAudioStatus { available = false, muted = false };
+            bool next = !allMuted;
+            foreach (var match in matches) match.SetMute(next, Guid.Empty);
+            return new ProcessAudioStatus { available = true, muted = next };
+        }
+
         public static void SetMaster(int volume) {
             var endpoint = Activate<IAudioEndpointVolume>(DefaultDevice(), "5CDF2C82-841E-4546-9722-0CF74078229A");
             endpoint.SetMasterVolumeLevelScalar(Math.Max(0, Math.Min(100, volume)) / 100f, Guid.Empty);
@@ -253,6 +292,7 @@ switch ($Action) {
     'master' { [EndoDeck.Audio]::SetMaster($Volume); @{ ok = $true } | ConvertTo-Json -Compress }
     'session' { [EndoDeck.Audio]::SetSession($SessionId, $Volume); @{ ok = $true } | ConvertTo-Json -Compress }
     'microphone-toggle' { @{ ok = $true; muted = [EndoDeck.Audio]::ToggleMicrophone() } | ConvertTo-Json -Compress }
+    'process-toggle' { [EndoDeck.Audio]::ToggleProcess($ProcessName) | ConvertTo-Json -Compress }
     'status' { [EndoDeck.Audio]::Status() | ConvertTo-Json -Compress }
     default { [EndoDeck.Audio]::List() | ConvertTo-Json -Depth 5 -Compress }
 }

@@ -136,6 +136,7 @@ async function trigger(button, element) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Błąd akcji");
     if (result.page) render(result.page);
+    if (result.message) showToast(result.message);
   } catch (error) { showToast(error.message, true); }
   finally { setTimeout(() => element.classList.remove("pressed"), 140); }
 }

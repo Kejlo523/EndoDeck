@@ -54,13 +54,12 @@
           "icon": "headset",
           "tone": "red",
           "action": {
-            "type": "backgroundProcessHotkey",
-            "process": "Discord",
-            "keys": [
-              "CTRL",
-              "SHIFT",
-              "D"
-            ]
+            "type": "processAudioMute",
+            "process": "Discord"
+          },
+          "status": {
+            "type": "processAudioMute",
+            "process": "Discord"
           }
         },
         {
