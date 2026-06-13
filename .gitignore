@@ -1,0 +1,20 @@
+# Runtime state
+.endodeck.pid
+endodeck.log
+endodeck-error.log
+
+# Local Android signing material
+android/*.keystore
+android/*.jks
+android/build/
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local dependencies and temporary output
+node_modules/
+*.tmp
+*.bak

@@ -1,0 +1,88 @@
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+const virtualKeys = {
+  playPause: 0xB3,
+  next: 0xB0,
+  previous: 0xB1,
+  volumeMute: 0xAD,
+  volumeDown: 0xAE,
+  volumeUp: 0xAF
+};
+
+const hotkeyCodes = {
+  CTRL: 0x11,
+  SHIFT: 0x10,
+  ALT: 0x12,
+  WIN: 0x5B,
+  ENTER: 0x0D,
+  ESC: 0x1B,
+  SPACE: 0x20,
+  TAB: 0x09,
+  BACKSPACE: 0x08,
+  DELETE: 0x2E,
+  INSERT: 0x2D,
+  HOME: 0x24,
+  END: 0x23,
+  PAGEUP: 0x21,
+  PAGEDOWN: 0x22,
+  UP: 0x26,
+  DOWN: 0x28,
+  LEFT: 0x25,
+  RIGHT: 0x27
+};
+
+function keyCode(key) {
+  const normalized = String(key).toUpperCase();
+  if (hotkeyCodes[normalized]) return hotkeyCodes[normalized];
+  if (/^[A-Z0-9]$/.test(normalized)) return normalized.charCodeAt(0);
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(normalized)) return 0x6F + Number(normalized.slice(1));
+  throw new Error(`Nieobsługiwany klawisz: ${key}`);
+}
+
+async function pressVirtualKeys(keys) {
+  const codes = keys.map(keyCode);
+  const down = codes.map((code) => `[DeckKeys]::keybd_event(${code},0,0,[UIntPtr]::Zero)`).join(";");
+  const up = [...codes].reverse().map((code) => `[DeckKeys]::keybd_event(${code},0,2,[UIntPtr]::Zero)`).join(";");
+  const script = `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class DeckKeys { [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr extra); }';${down};Start-Sleep -Milliseconds 45;${up}`;
+  await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 5000 });
+}
+
+async function pressMediaKey(name) {
+  const code = virtualKeys[name];
+  if (!code) throw new Error(`Nieobsługiwany klawisz multimedialny: ${name}`);
+  const script = `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class DeckMedia { [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr extra); }';[DeckMedia]::keybd_event(${code},0,0,[UIntPtr]::Zero);Start-Sleep -Milliseconds 40;[DeckMedia]::keybd_event(${code},0,2,[UIntPtr]::Zero)`;
+  await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 5000 });
+}
+
+export async function executeAction(action, context) {
+  switch (action.type) {
+    case "page":
+      return { page: action.page };
+    case "media":
+      await pressMediaKey(action.key);
+      return {};
+    case "hotkey":
+      await pressVirtualKeys(action.keys ?? []);
+      return {};
+    case "launch": {
+      const child = spawn(action.command, action.args ?? [], { detached: true, stdio: "ignore", windowsHide: false });
+      child.unref();
+      return {};
+    }
+    case "command": {
+      await execFileAsync(action.command, action.args ?? [], { windowsHide: true, timeout: action.timeout ?? 15000 });
+      return {};
+    }
+    case "sequence":
+      for (const nestedAction of action.actions ?? []) {
+        await executeAction(nestedAction, context);
+        await new Promise((resolve) => setTimeout(resolve, action.delay ?? 180));
+      }
+      return {};
+    default:
+      throw new Error(`Nieznany typ akcji: ${action.type}`);
+  }
+}
