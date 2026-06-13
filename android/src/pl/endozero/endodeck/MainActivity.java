@@ -5,11 +5,14 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -23,6 +26,38 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private boolean deckVisible;
     private boolean destroyed;
+    private SharedPreferences preferences;
+
+    private final class DeckBridge {
+        @JavascriptInterface
+        public void setBrightness(final double value) {
+            runOnUiThread(() -> {
+                WindowManager.LayoutParams params = getWindow().getAttributes();
+                params.screenBrightness = value < 0 ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    : Math.max(0.01f, Math.min(1f, (float) value));
+                getWindow().setAttributes(params);
+            });
+        }
+
+        @JavascriptInterface
+        public void cacheWeather(String weatherJson) {
+            if (weatherJson == null || weatherJson.length() > 100_000) return;
+            preferences.edit()
+                .putString("cached_weather", weatherJson)
+                .putLong("cached_weather_at", System.currentTimeMillis())
+                .apply();
+        }
+
+        @JavascriptInterface
+        public String getCachedWeather() {
+            return preferences.getString("cached_weather", "");
+        }
+
+        @JavascriptInterface
+        public long getCachedWeatherAt() {
+            return preferences.getLong("cached_weather_at", 0L);
+        }
+    }
 
     private final Runnable connectionProbe = new Runnable() {
         @Override
@@ -61,6 +96,7 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
+        preferences = getSharedPreferences("endodeck", Context.MODE_PRIVATE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
@@ -74,11 +110,13 @@ public final class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        webView.addJavascriptInterface(new DeckBridge(), "NativeDeck");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 deckVisible = url != null && url.startsWith(DECK_URL);
+                if (deckVisible) setWindowBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE);
             }
 
             @Override
@@ -103,6 +141,12 @@ public final class MainActivity extends Activity {
         if (!deckVisible && OFFLINE_URL.equals(webView.getUrl())) return;
         deckVisible = false;
         webView.loadUrl(OFFLINE_URL);
+    }
+
+    private void setWindowBrightness(float brightness) {
+        WindowManager.LayoutParams params = getWindow().getAttributes();
+        params.screenBrightness = brightness;
+        getWindow().setAttributes(params);
     }
 
     private void enterImmersiveMode() {

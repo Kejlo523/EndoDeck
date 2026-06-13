@@ -1,4 +1,4 @@
-import { iconSvg, renderIconPicker, resolveIcon } from "./icon-ui.js";
+import { iconSvg } from "./icon-ui.js";
 
 const $ = (selector) => document.querySelector(selector);
 const grid = $("#button-grid");
@@ -7,20 +7,20 @@ const settingsPanel = $("#settings-panel");
 const settingsForm = $("#settings-form");
 const screensaver = $("#screensaver");
 const fields = {
-  page: $("#edit-page"), button: $("#edit-button"), label: $("#edit-label"), hint: $("#edit-hint"),
-  tone: $("#edit-tone"), accent: $("#edit-accent"), type: $("#edit-type"), primary: $("#edit-primary"),
-  detail: $("#edit-detail"), primaryLabel: $("#edit-primary-label"), detailLabel: $("#edit-detail-label"),
-  iconSearch: $("#quick-icon-search"), iconGrid: $("#quick-icon-grid"), selectedIcon: $("#quick-selected-icon")
+  accent: $("#edit-accent"),
+  dim: $("#edit-dim"),
+  saver: $("#edit-saver")
 };
 
 let config;
 let currentPage = "home";
-let selectedIcon = "wand-magic-sparkles";
 let latestState = {};
 let toastTimer;
 let audioRefreshTimer;
 let inactivityTimer;
 let screensaverTimer;
+let burnInTimer;
+let screensaverActive = false;
 
 function showToast(message, error = false) {
   clearTimeout(toastTimer);
@@ -47,6 +47,7 @@ function createDeckButton(button) {
   const element = document.createElement("button");
   element.className = `deck-button tone-${button.tone ?? "neutral"}`;
   element.dataset.id = button.id;
+  element.style.setProperty("--enter-delay", `${Math.min(11, Math.max(0, Number(button.position ?? 1) - 1)) * 24}ms`);
   element.setAttribute("aria-label", `${button.label} ${button.hint ?? ""}`.trim());
   element.innerHTML = `<span class="tile-number">${String(button.position ?? "").padStart(2, "0")}</span><span class="live-badge"></span><span class="icon">${iconSvg(button.icon)}</span><span class="tile-copy"><strong>${button.label}</strong><small>${button.hint ?? ""}</small></span>`;
   element.addEventListener("click", () => trigger(button, element));
@@ -60,6 +61,7 @@ function render(pageName) {
   $("#page-label").textContent = page.label;
   if (page.layout === "mixer") return renderMixer(page);
   grid.className = "button-grid";
+  grid.classList.add("page-entering");
   grid.replaceChildren(...page.buttons.map((button, index) => createDeckButton({ ...button, position: index + 1 })));
   applyControlStates();
 }
@@ -110,6 +112,7 @@ async function loadMixer(board) {
 
 function renderMixer(page) {
   grid.className = "button-grid audio-grid";
+  grid.classList.add("page-entering");
   const board = document.createElement("section");
   board.className = "mixer-board";
   board.innerHTML = '<div class="mixer-loading">ODCZYTUJĘ MIKSER WINDOWS…</div>';
@@ -135,56 +138,10 @@ async function trigger(button, element) {
   finally { setTimeout(() => element.classList.remove("pressed"), 140); }
 }
 
-function selectedButton() { return config.pages[fields.page.value].buttons[Number(fields.button.value)]; }
-
-function selectQuickIcon(name) {
-  selectedIcon = resolveIcon(name);
-  fields.selectedIcon.innerHTML = `${iconSvg(selectedIcon)}<span>${selectedIcon}</span>`;
-  renderIconPicker(fields.iconGrid, fields.iconSearch.value, selectedIcon, selectQuickIcon);
-}
-
-function fillButtonOptions() {
-  fields.button.replaceChildren(...config.pages[fields.page.value].buttons.map((button, index) => new Option(button.label, String(index))));
-  loadEditor();
-}
-
-function updateActionLabels() {
-  const labels = {
-    hotkey: ["Klawisze, np. CTRL + SHIFT + P", "Nie używane"], processHotkey: ["Proces, np. Discord", "Klawisze, np. CTRL + SHIFT + M"],
-    launch: ["Program lub adres", "Argumenty jako JSON"], command: ["Polecenie", "Argumenty jako JSON"], media: ["playPause / next / previous", "Nie używane"],
-    page: ["Nazwa strony, np. home", "Nie używane"], sequence: ["Sekwencja", "Lista akcji jako JSON"], microphoneMute: ["Sterowanie mikrofonem systemowym", "Stan jest odczytywany z Windows"]
-  };
-  [fields.primaryLabel.textContent, fields.detailLabel.textContent] = labels[fields.type.value];
-  const noInput = fields.type.value === "microphoneMute";
-  fields.primary.disabled = fields.type.value === "sequence" || noInput;
-  fields.detail.closest("label").classList.toggle("muted-field", ["hotkey", "media", "page", "microphoneMute"].includes(fields.type.value));
-}
-
-function loadEditor() {
-  const button = selectedButton();
-  if (!button) return;
-  fields.label.value = button.label; fields.hint.value = button.hint ?? ""; fields.tone.value = button.tone ?? "neutral"; fields.type.value = button.action.type;
-  selectedIcon = resolveIcon(button.icon); fields.iconSearch.value = ""; selectQuickIcon(selectedIcon);
-  const action = button.action;
-  fields.primary.value = action.type === "hotkey" ? (action.keys ?? []).join(" + ") : action.type === "processHotkey" ? action.process ?? "" : action.type === "media" ? action.key ?? "" : action.type === "page" ? action.page ?? "" : action.command ?? "";
-  fields.detail.value = action.type === "processHotkey" ? (action.keys ?? []).join(" + ") : action.type === "sequence" ? JSON.stringify(action.actions ?? [], null, 2) : ["launch", "command"].includes(action.type) ? JSON.stringify(action.args ?? []) : "";
-  updateActionLabels();
-}
-
-function buildAction() {
-  const type = fields.type.value;
-  if (type === "microphoneMute") return { type };
-  if (type === "hotkey") return { type, keys: fields.primary.value.split(/[+,\s]+/).filter(Boolean).map((key) => key.toUpperCase()) };
-  if (type === "processHotkey") return { type, process: fields.primary.value.trim(), keys: fields.detail.value.split(/[+,\s]+/).filter(Boolean).map((key) => key.toUpperCase()) };
-  if (type === "media") return { type, key: fields.primary.value.trim() };
-  if (type === "page") return { type, page: fields.primary.value.trim() };
-  if (type === "sequence") return { type, actions: JSON.parse(fields.detail.value || "[]") };
-  return { type, command: fields.primary.value.trim(), args: JSON.parse(fields.detail.value || "[]") };
-}
-
 function openSettings() {
-  fields.page.replaceChildren(...Object.entries(config.pages).map(([name, page]) => new Option(page.label, name)));
-  fields.page.value = currentPage; fields.accent.value = config.accent; fillButtonOptions();
+  fields.accent.value = config.accent;
+  fields.dim.value = String(config.ui?.dimAfterSeconds ?? 90);
+  fields.saver.value = String(config.ui?.screensaverAfterSeconds ?? 300);
   settingsPanel.classList.remove("hidden"); settingsPanel.setAttribute("aria-hidden", "false");
 }
 
@@ -193,18 +150,24 @@ function closeSettings() { settingsPanel.classList.add("hidden"); settingsPanel.
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const button = selectedButton();
-    button.label = fields.label.value.trim(); button.hint = fields.hint.value.trim(); button.icon = selectedIcon; button.tone = fields.tone.value; button.action = buildAction(); config.accent = fields.accent.value;
+    config.accent = fields.accent.value;
+    config.ui = {
+      dimAfterSeconds: Math.max(10, Number(fields.dim.value) || 90),
+      screensaverAfterSeconds: Math.max(30, Number(fields.saver.value) || 300)
+    };
     const response = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Nie udało się zapisać");
-    config = result.config; document.documentElement.style.setProperty("--accent", config.accent); render(currentPage); fillButtonOptions(); showToast("Zapisano przycisk");
+    config = result.config;
+    document.documentElement.style.setProperty("--accent", config.accent);
+    render(currentPage);
+    resetIdle();
+    closeSettings();
+    showToast("Zapisano ustawienia");
   } catch (error) { showToast(error.message, true); }
 });
 
 $("#settings-trigger").addEventListener("click", openSettings); $("#settings-close").addEventListener("click", closeSettings);
-fields.page.addEventListener("change", fillButtonOptions); fields.button.addEventListener("change", loadEditor); fields.type.addEventListener("change", updateActionLabels);
-fields.iconSearch.addEventListener("input", () => renderIconPicker(fields.iconGrid, fields.iconSearch.value, selectedIcon, selectQuickIcon));
 
 function updateState(state) {
   latestState = state;
@@ -233,11 +196,45 @@ function renderWeather(weather) {
   $("#forecast").innerHTML = weather.daily.map((day) => { const date = new Date(`${day.date}T12:00:00`); const [, daySymbol] = weatherInfo(day.code); return `<div class="forecast-day"><b>${new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date)}</b><span>${daySymbol}</span><strong>${day.max}°</strong><small>${day.min}° · ${day.rain}%</small></div>`; }).join("");
 }
 
-async function loadWeather() { try { const response = await fetch("/api/weather"); if (response.ok) renderWeather(await response.json()); } catch { } }
+async function loadWeather() {
+  try {
+    const response = await fetch("/api/weather");
+    if (!response.ok) return;
+    const weather = await response.json();
+    renderWeather(weather);
+    try { window.NativeDeck?.cacheWeather(JSON.stringify(weather)); } catch { }
+  } catch { }
+}
 
-function showScreensaver() { document.body.classList.remove("dimmed"); screensaver.classList.remove("hidden"); screensaver.setAttribute("aria-hidden", "false"); loadWeather(); }
+function setDeckBrightness(value) {
+  try { window.NativeDeck?.setBrightness(value); } catch { }
+}
+
+function rotateScreensaver() {
+  const phase = Math.floor(Date.now() / 120_000);
+  const positions = [[-12, -8], [10, -6], [-8, 10], [12, 8], [0, -12], [0, 12]];
+  const [x, y] = positions[phase % positions.length];
+  screensaver.style.setProperty("--burn-x", `${x}px`);
+  screensaver.style.setProperty("--burn-y", `${y}px`);
+  screensaver.classList.toggle("layout-swapped", phase % 2 === 1);
+}
+
+function showScreensaver() {
+  screensaverActive = true;
+  document.body.classList.remove("dimmed");
+  rotateScreensaver();
+  clearInterval(burnInTimer);
+  burnInTimer = setInterval(rotateScreensaver, 60_000);
+  screensaver.classList.remove("hidden");
+  screensaver.setAttribute("aria-hidden", "false");
+  setDeckBrightness(.055);
+  loadWeather();
+}
 function resetIdle() {
-  clearTimeout(inactivityTimer); clearTimeout(screensaverTimer); document.body.classList.remove("dimmed"); screensaver.classList.add("hidden"); screensaver.setAttribute("aria-hidden", "true");
+  clearTimeout(inactivityTimer); clearTimeout(screensaverTimer); clearInterval(burnInTimer);
+  if (screensaverActive) setDeckBrightness(-1);
+  screensaverActive = false;
+  document.body.classList.remove("dimmed"); screensaver.classList.add("hidden"); screensaver.setAttribute("aria-hidden", "true");
   inactivityTimer = setTimeout(() => document.body.classList.add("dimmed"), Math.max(10, config.ui?.dimAfterSeconds ?? 90) * 1000);
   screensaverTimer = setTimeout(showScreensaver, Math.max(30, config.ui?.screensaverAfterSeconds ?? 300) * 1000);
 }

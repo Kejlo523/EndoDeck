@@ -9,9 +9,10 @@ Lokalny Stream Deck z telefonu Huawei P8 Lite, sterowany przez USB i `adb revers
 - multimedia, programy, skróty Windows, sekwencje akcji i mikser głośności aplikacji
 - Studio PC do edycji kafelków, kolejności, kolorów i akcji, z wyszukiwalnym katalogiem ponad 140 ikon
 - wybór miasta z listy lub bezpośrednio z mapy OpenStreetMap
-- regulowany kolor akcentu, przyciemnienie i wygaszacz z pogodą na siedem dni oraz sekundami przy zegarze
+- regulowany kolor akcentu, płynne przyciemnienie po 90 sekundach i wygaszacz z pogodą na siedem dni oraz sekundami przy zegarze
 - pasek stanu z połączeniem USB, prądem baterii i poziomem naładowania
-- lokalny ekran `PODŁĄCZ KOMPUTER`, gdy serwer lub przewód USB jest niedostępny
+- krótki komunikat o niedostępnym PC, a następnie lokalny wygaszacz z pogodą zapisaną w cache telefonu
+- obniżenie jasności przez natywne API Androida oraz okresowe przesuwanie i zamianę elementów wygaszacza
 - moduły Magisk do uśpienia po odłączeniu, wyłączenia radia, DT2W i usunięcia blokady
 - dwuczęściowa obudowa P8 Lite gotowa do druku 3D
 
@@ -66,6 +67,10 @@ Kafle programów mogą mieć źródło stanu `process`, dlatego Discord i Spotif
 Mikser używa Windows Core Audio. Pokazuje poziom systemowy oraz aplikacje mające aktywną sesję dźwięku. Aplikacja pojawi się po rozpoczęciu odtwarzania lub wygenerowaniu dźwięku.
 
 Wartość mA pochodzi z czujnika baterii telefonu. Jest najlepszym dostępnym przybliżeniem bilansu energii, ale P8 Lite nie udostępnia osobnego czujnika prądu wejściowego USB.
+
+Telefon zapisuje ostatnią poprawną prognozę w pamięci aplikacji, dlatego pogoda pozostaje dostępna również po utracie połączenia z serwerem. Gdy połączenie wróci, cache jest automatycznie odświeżany. Ustawienia dostępne bezpośrednio na decku są celowo ograniczone do koloru akcentu i czasów bezczynności; pełna edycja kafelków pozostaje w Studio PC.
+
+Panel tego egzemplarza P8 Lite zgłasza tylko jeden sprzętowy tryb: `720 x 1280 @ 60 Hz`. System ani sterownik nie udostępniają bezpiecznego trybu 30 lub 48 Hz, dlatego optymalizacja energii korzysta z niskiej jasności, spokojnych animacji i wygaszania zamiast ryzykownego wymuszania częstotliwości.
 
 Interfejs korzysta z [Font Awesome Free](https://fontawesome.com/license/free) oraz [Leaflet](https://leafletjs.com/). Warstwa mapy pochodzi z [OpenStreetMap](https://www.openstreetmap.org/copyright), a wyszukiwanie i odwrotne geokodowanie są wykonywane przez backend z ograniczeniem częstotliwości zapytań.
 
