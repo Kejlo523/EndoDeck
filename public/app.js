@@ -22,6 +22,7 @@ let screensaverTimer;
 let burnInTimer;
 let screensaverActive = false;
 let latestWeather;
+let suppressDeckClickUntil = 0;
 
 function showToast(message, error = false) {
   clearTimeout(toastTimer);
@@ -230,7 +231,7 @@ function screensaverBrightness(weather, offline = false) {
   const today = weather?.daily?.find((day) => day.date === date) ?? weather?.daily?.[0];
   const sunrise = eventMinute(today?.sunrise);
   const sunset = eventMinute(today?.sunset);
-  const levels = offline ? { night: .052, day: .072, twilight: .080 } : { night: .062, day: .082, twilight: .090 };
+  const levels = offline ? { night: .052, day: .082, twilight: .080 } : { night: .062, day: .092, twilight: .090 };
   if (sunrise === null || sunset === null) return levels.night;
   if (Math.abs(minute - sunrise) <= 45 || Math.abs(minute - sunset) <= 45) return levels.twilight;
   return minute > sunrise && minute < sunset ? levels.day : levels.night;
@@ -281,6 +282,20 @@ function resetIdle() {
   screensaverTimer = setTimeout(showScreensaver, Math.max(30, config.ui?.screensaverAfterSeconds ?? 300) * 1000);
 }
 
+function wakeFromScreensaver(event) {
+  if (!screensaverActive) return;
+  suppressDeckClickUntil = Date.now() + 700;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  resetIdle();
+}
+
+function suppressWakeClick(event) {
+  if (Date.now() >= suppressDeckClickUntil) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
 async function boot() {
   applyConfig(await fetch("/api/config").then((response) => response.json()), false);
   $("#settings-trigger").innerHTML = iconSvg("gear");
@@ -288,6 +303,9 @@ async function boot() {
   const events = new EventSource("/api/events"); events.addEventListener("message", (event) => updateState(JSON.parse(event.data)));
   events.addEventListener("config", (event) => applyConfig(JSON.parse(event.data)));
   setInterval(updateClock, 1000); setInterval(loadWeather, 15 * 60_000);
+  document.addEventListener("pointerdown", wakeFromScreensaver, { capture: true, passive: false });
+  document.addEventListener("touchstart", wakeFromScreensaver, { capture: true, passive: false });
+  document.addEventListener("click", suppressWakeClick, { capture: true, passive: false });
   for (const event of ["pointerdown", "touchstart", "keydown"]) document.addEventListener(event, resetIdle, { passive: true });
 }
 
