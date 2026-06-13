@@ -34,7 +34,7 @@ function Get-NowPlaying {
     $sessions = $manager.GetSessions()
     if (-not $sessions -or $sessions.Count -eq 0) { return $null }
 
-    # Wybór: najpierw sesja faktycznie odtwarzająca, w przeciwnym razie bieżąca/pierwsza.
+    # Wybór wyłącznie sesji faktycznie odtwarzającej — bez fallbacku na zapauzowany utwór.
     $chosen = $null
     foreach ($session in $sessions) {
         $info = $session.GetPlaybackInfo()
@@ -43,12 +43,10 @@ function Get-NowPlaying {
             break
         }
     }
-    if (-not $chosen) { $chosen = $manager.GetCurrentSession() }
-    if (-not $chosen) { $chosen = $sessions[0] }
     if (-not $chosen) { return $null }
 
     $props = Await ($chosen.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
-    if (-not $props) { return $null }
+    if (-not $props -or [string]::IsNullOrWhiteSpace($props.Title)) { return $null }
 
     $playback = $chosen.GetPlaybackInfo()
     $status = if ($playback) { $playback.PlaybackStatus.ToString() } else { 'Unknown' }
@@ -68,7 +66,7 @@ function Get-NowPlaying {
 
 try {
     $result = Get-NowPlaying
-    $json = if ($result -and $result.title) { $result | ConvertTo-Json -Compress } else { '{}' }
+    $json = if ($result -and $result.title -and $result.playing) { $result | ConvertTo-Json -Compress } else { '{}' }
 } catch {
     $json = '{}'
 }

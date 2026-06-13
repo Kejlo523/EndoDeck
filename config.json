@@ -4,7 +4,9 @@
   "accent": "#ddc2ff",
   "ui": {
     "dimAfterSeconds": 20,
-    "screensaverAfterSeconds": 60
+    "screensaverAfterSeconds": 30,
+    "showNowPlaying": true,
+    "showEqualizer": true
   },
   "weather": {
     "city": "Szczecin",

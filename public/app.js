@@ -186,17 +186,38 @@ $("#settings-trigger").addEventListener("click", openSettings); $("#settings-clo
 function nowPlayingEnabled() { return config?.ui?.showNowPlaying !== false; }
 function equalizerEnabled() { return config?.ui?.showEqualizer !== false; }
 
+let nowPlayingVisible = false;
+
+function animateNowPlayingBar(element, show) {
+  element.classList.remove("np-entering", "np-leaving");
+  if (show) {
+    element.classList.remove("hidden");
+    element.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => element.classList.add("np-entering"));
+    setTimeout(() => element.classList.remove("np-entering"), 520);
+    return;
+  }
+  element.classList.add("np-leaving");
+  element.setAttribute("aria-hidden", "true");
+  setTimeout(() => {
+    element.classList.remove("np-leaving");
+    element.classList.add("hidden");
+  }, 400);
+}
+
 function renderNowPlaying() {
   const track = latestState.nowPlaying;
   const enabled = nowPlayingEnabled();
-  const hasTrack = enabled && track && track.title;
+  const hasTrack = enabled && track && track.title && track.playing;
   const showEq = equalizerEnabled();
 
-  nowPlayingBar.classList.toggle("hidden", !hasTrack);
-  nowPlayingBar.setAttribute("aria-hidden", String(!hasTrack));
-  saverNowPlaying.classList.toggle("hidden", !hasTrack);
-  saverNowPlaying.setAttribute("aria-hidden", String(!hasTrack));
-  screensaver.classList.toggle("has-now-playing", hasTrack);
+  if (hasTrack !== nowPlayingVisible) {
+    nowPlayingVisible = hasTrack;
+    animateNowPlayingBar(nowPlayingBar, hasTrack);
+    animateNowPlayingBar(saverNowPlaying, hasTrack);
+    screensaver.classList.toggle("has-now-playing", hasTrack);
+  }
+
   if (!hasTrack) return;
 
   $("#now-playing-title").textContent = track.title;

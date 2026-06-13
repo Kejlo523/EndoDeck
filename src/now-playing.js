@@ -12,7 +12,7 @@ let cacheTime = 0;
 let inFlight = null;
 
 function normalize(raw) {
-  if (!raw || typeof raw !== "object" || !raw.title) return { ...EMPTY };
+  if (!raw || typeof raw !== "object" || !raw.title || !raw.playing) return { ...EMPTY };
   return {
     title: String(raw.title ?? "").trim(),
     artist: String(raw.artist ?? "").trim(),
