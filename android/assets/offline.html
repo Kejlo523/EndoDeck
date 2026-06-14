@@ -10,7 +10,7 @@
     body{color:var(--ink);background:#060806;user-select:none;-webkit-tap-highlight-color:transparent}
 
     .notice,.saver{position:fixed;inset:0}
-    .notice{z-index:3;display:grid;place-items:center;opacity:1;visibility:visible;background:#070907;transition:opacity 1.2s ease,visibility 0s linear 0s}
+    .notice{z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px 12px calc(12px + env(safe-area-inset-bottom,0px));opacity:1;visibility:visible;background:#070907;transition:opacity 1.2s ease,visibility 0s linear 0s}
     .notice.hidden{opacity:0;visibility:hidden;pointer-events:none;transition:opacity 1.2s ease,visibility 0s linear 1.2s}
     .shell{width:min(720px,82vw);display:grid;justify-items:center;gap:16px;text-align:center}
     .cable{width:70px;height:70px;color:var(--accent);animation:breathe 2.2s ease-in-out infinite}
@@ -53,6 +53,13 @@
     .sun-times span:last-child{color:#9583c7}
     .cache-empty{grid-column:1/3;min-height:78px;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;color:var(--muted);font:10px Consolas,monospace}
     .saver footer{position:absolute;z-index:2;left:50%;bottom:8px;transform:translateX(calc(-50% + var(--burn-x)));color:#555b53;font:8px Consolas,monospace;letter-spacing:.16em;white-space:nowrap;transition:transform 90s cubic-bezier(.4,0,.2,1)}
+    .offline-switches{width:min(720px,92vw);display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+    .offline-switches.hidden{display:none}
+    .offline-switch{min-height:64px;padding:8px 10px;display:grid;align-content:center;gap:4px;border:1px solid var(--line);border-radius:12px;background:#0b0e0b;color:var(--ink);text-align:left;font:inherit}
+    .offline-switch.is-on{border-color:color-mix(in srgb,var(--switch-tone) 58%,transparent);background:color-mix(in srgb,var(--switch-tone) 12%,#0b0e0b);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--switch-tone) 14%,transparent)}
+    .offline-switch strong{font-size:11px;letter-spacing:.08em;font-weight:600}
+    .offline-switch small{color:var(--muted);font:8px/1.4 Consolas,monospace}
+    .offline-switch:disabled{opacity:.55}
     @keyframes breathe{50%{opacity:.42;transform:translateY(4px)}}
     @media(max-height:430px){
       .saver-main{padding:30px 5vw 20px;gap:6px 4vw}
@@ -81,6 +88,7 @@
       <p>EndoDeck czeka na serwer przez USB.<br>Panel wróci automatycznie po wykryciu komputera.</p>
       <div class="status"><span class="dot"></span> HOST PC OFFLINE</div>
     </main>
+    <nav class="offline-switches hidden" id="offline-switches" aria-label="Przełączniki Tapo"></nav>
   </section>
 
   <section class="saver" id="saver">
@@ -108,9 +116,15 @@
   <script>
     const notice = document.querySelector("#notice");
     const saver = document.querySelector("#saver");
+    const offlineSwitches = document.querySelector("#offline-switches");
     let noticeTimer;
     let burnInTimer;
     let cachedWeather;
+    let offlineBundle = null;
+    let switchStates = {};
+    let switchBusy = false;
+
+    const toneMap = { accent:"#b7f34a", green:"#62e49b", red:"#ff6663", blue:"#58b9ff", amber:"#ffc15c", violet:"#9f8dff", neutral:"#a7ada4" };
 
     const labels = {
       0:["SŁONECZNIE","☀"],1:["PRAWIE BEZCHMURNIE","◒"],2:["CZĘŚCIOWE ZACHMURZENIE","◑"],3:["POCHMURNO","☁"],
@@ -213,6 +227,92 @@
       } catch {}
     }
 
+    function loadOfflineBundle() {
+      try {
+        const raw = window.NativeDeck?.getOfflineBundle?.();
+        offlineBundle = raw ? JSON.parse(raw) : null;
+      } catch {
+        offlineBundle = null;
+      }
+      renderOfflineSwitches();
+    }
+
+    function switchTone(tone) {
+      return toneMap[tone] || toneMap.green;
+    }
+
+    function renderOfflineSwitches() {
+      if (!offlineBundle?.ready || !offlineBundle.switches?.length) {
+        offlineSwitches.classList.add("hidden");
+        offlineSwitches.replaceChildren();
+        return;
+      }
+      offlineSwitches.classList.remove("hidden");
+      offlineSwitches.replaceChildren(...offlineBundle.switches.map((entry) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `offline-switch${switchStates[entry.alias]?.active ? " is-on" : ""}`;
+        button.style.setProperty("--switch-tone", switchTone(entry.tone));
+        button.disabled = switchBusy;
+        button.innerHTML = `<strong>${entry.label}</strong><small>${entry.hint || "Tapo · WiFi"}</small>`;
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          toggleOfflineSwitch(entry.alias, button);
+        });
+        return button;
+      }));
+    }
+
+    function applySwitchState(alias, state) {
+      switchStates[alias] = state;
+      renderOfflineSwitches();
+    }
+
+    async function refreshOfflineSwitchStates() {
+      if (!offlineBundle?.ready) return;
+      try {
+        const raw = window.NativeDeck?.getLocalDeviceStates?.();
+        if (!raw) return;
+        const states = JSON.parse(raw);
+        for (const [alias, state] of Object.entries(states)) applySwitchState(alias, state);
+      } catch {}
+    }
+
+    async function toggleOfflineSwitch(alias, button) {
+      if (switchBusy) return;
+      switchBusy = true;
+      renderOfflineSwitches();
+      try {
+        if (offlineBundle?.lanHost) {
+          try {
+            const response = await fetch(`http://${offlineBundle.lanHost}:${offlineBundle.port}/api/offline/toggle`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ alias })
+            });
+            const result = await response.json();
+            if (response.ok) {
+              applySwitchState(alias, result);
+              navigator.vibrate?.(24);
+              return;
+            }
+          } catch {}
+        }
+        const raw = window.NativeDeck?.toggleLocalDevice?.(alias);
+        if (!raw) throw new Error("Brak sterowania Tapo offline");
+        const result = JSON.parse(raw);
+        if (!result.available) throw new Error(result.error || "Nie udało się przełączyć urządzenia");
+        applySwitchState(alias, result);
+        navigator.vibrate?.(24);
+      } catch (error) {
+        button.classList.remove("is-on");
+        navigator.vibrate?.(8);
+      } finally {
+        switchBusy = false;
+        renderOfflineSwitches();
+      }
+    }
+
     function loadWeather() {
       try {
         const accent = window.NativeDeck?.getCachedAccent();
@@ -259,8 +359,13 @@
       noticeTimer = setTimeout(showSaver, 4200);
     }
 
-    document.addEventListener("pointerdown", showNotice, { passive: true });
+    document.addEventListener("pointerdown", (event) => {
+      if (event.target.closest(".offline-switches")) return;
+      showNotice();
+    }, { passive: true });
+    loadOfflineBundle();
     loadWeather();
+    refreshOfflineSwitchStates();
     updateClock();
     rotateScreensaver();
     showNotice();
@@ -268,6 +373,7 @@
     setInterval(updateClock, 1000);
     setInterval(applyBrightness, 60_000);
     setInterval(refreshWeather, 45 * 60_000);
+    setInterval(() => { loadOfflineBundle(); refreshOfflineSwitchStates(); }, 60_000);
   </script>
 </body>
 </html>

@@ -69,6 +69,88 @@ public final class MainActivity extends Activity {
         public String getCachedAccent() {
             return preferences.getString("cached_accent", "#b7f34a");
         }
+
+        @JavascriptInterface
+        public void cacheOfflineBundle(String bundleJson) {
+            if (bundleJson == null || bundleJson.length() > 200_000) return;
+            preferences.edit().putString("offline_bundle", bundleJson).apply();
+        }
+
+        @JavascriptInterface
+        public String getOfflineBundle() {
+            return preferences.getString("offline_bundle", "{}");
+        }
+
+        @JavascriptInterface
+        public String getLocalDeviceStates() {
+            try {
+                org.json.JSONObject bundle = readOfflineBundle();
+                org.json.JSONObject states = new org.json.JSONObject();
+                if (!bundle.optBoolean("ready", false)) return states.toString();
+                org.json.JSONObject devices = bundle.getJSONObject("devices");
+                org.json.JSONObject tapo = bundle.getJSONObject("tapo");
+                java.util.Iterator<String> keys = devices.keys();
+                while (keys.hasNext()) {
+                    String alias = keys.next();
+                    org.json.JSONObject state = new org.json.JSONObject();
+                    try {
+                        org.json.JSONObject device = devices.getJSONObject(alias);
+                        TapoClient client = new TapoClient(
+                            device.getString("ip"),
+                            tapo.getString("username"),
+                            tapo.getString("password")
+                        );
+                        state.put("active", client.getState());
+                        state.put("available", true);
+                    } catch (Exception error) {
+                        state.put("active", false);
+                        state.put("available", false);
+                        state.put("error", error.getMessage() == null ? "Blad Tapo" : error.getMessage());
+                    }
+                    states.put(alias, state);
+                }
+                return states.toString();
+            } catch (Exception error) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public String toggleLocalDevice(String alias) {
+            try {
+                org.json.JSONObject bundle = readOfflineBundle();
+                if (!bundle.optBoolean("ready", false)) throw new Exception("Brak zapisanych urzadzen Tapo");
+                org.json.JSONObject devices = bundle.getJSONObject("devices");
+                org.json.JSONObject device = devices.getJSONObject(alias);
+                org.json.JSONObject tapo = bundle.getJSONObject("tapo");
+                TapoClient client = new TapoClient(
+                    device.getString("ip"),
+                    tapo.getString("username"),
+                    tapo.getString("password")
+                );
+                boolean active = client.toggle();
+                org.json.JSONObject result = new org.json.JSONObject();
+                result.put("alias", alias);
+                result.put("active", active);
+                result.put("available", true);
+                return result.toString();
+            } catch (Exception error) {
+                try {
+                    org.json.JSONObject result = new org.json.JSONObject();
+                    result.put("alias", alias);
+                    result.put("active", false);
+                    result.put("available", false);
+                    result.put("error", error.getMessage() == null ? "Blad Tapo" : error.getMessage());
+                    return result.toString();
+                } catch (Exception ignored) {
+                    return "{\"available\":false,\"error\":\"Blad Tapo\"}";
+                }
+            }
+        }
+
+        private org.json.JSONObject readOfflineBundle() throws org.json.JSONException {
+            return new org.json.JSONObject(preferences.getString("offline_bundle", "{}"));
+        }
     }
 
     private final Runnable connectionProbe = new Runnable() {

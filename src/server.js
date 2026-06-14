@@ -9,8 +9,9 @@ import { getWeather } from "./weather.js";
 import { getControlStates } from "./control-status.js";
 import { getNowPlaying } from "./now-playing.js";
 import { reversePlace, searchPlaces } from "./geocode.js";
-import { getLocalDeviceSetup, saveLocalDeviceSetup, testLocalDevices } from "./local-devices.js";
+import { getLocalDeviceSetup, saveLocalDeviceSetup, testLocalDevices, toggleLocalDevice } from "./local-devices.js";
 import { getSystemStats } from "./system-stats.js";
+import { buildOfflineBundle } from "./offline-bundle.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const publicDir = join(root, "public");
@@ -129,6 +130,24 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/local-devices/test") {
       return sendJson(response, 200, await testLocalDevices());
     }
+    if (request.method === "GET" && url.pathname === "/api/offline-bundle") {
+      const remote = request.socket.remoteAddress ?? "";
+      if (remote !== "127.0.0.1" && remote !== "::1" && remote !== "::ffff:127.0.0.1") {
+        return sendJson(response, 403, { ok: false, error: "Dostęp tylko przez USB" });
+      }
+      return sendJson(response, 200, await buildOfflineBundle(config));
+    }
+    if (request.method === "POST" && url.pathname === "/api/offline/toggle") {
+      const body = await bodyJson(request);
+      const alias = String(body.alias ?? "").trim();
+      if (!alias) return sendJson(response, 400, { ok: false, error: "Nie wskazano urządzenia" });
+      try {
+        const result = await toggleLocalDevice(alias);
+        return sendJson(response, 200, { ok: true, alias, ...result });
+      } catch (error) {
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
     if (request.method === "POST" && url.pathname === "/api/audio") {
       const body = await bodyJson(request);
       const volume = Math.max(0, Math.min(100, Number(body.volume)));
@@ -186,7 +205,7 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(config.port, "127.0.0.1", () => {
+server.listen(config.port, "0.0.0.0", () => {
   console.log(`EndoDeck działa na http://127.0.0.1:${config.port}`);
   adb.start();
 });

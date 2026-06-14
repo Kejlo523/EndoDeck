@@ -21,8 +21,11 @@ New-Item -ItemType Directory -Path (Join-Path $build 'native\lib\armeabi-v7a') -
 & $aapt package -f -M (Join-Path $android 'AndroidManifest.xml') -A (Join-Path $android 'assets') -I $platform -F (Join-Path $build 'base-unsigned.apk')
 if ($LASTEXITCODE -ne 0) { throw 'aapt failed to build the resource package.' }
 
-$source = Join-Path $android 'src\pl\endozero\endodeck\MainActivity.java'
-& javac -source 8 -target 8 -encoding UTF-8 -classpath $platform -d (Join-Path $build 'classes') $source
+$sources = @(
+    (Join-Path $android 'src\pl\endozero\endodeck\MainActivity.java'),
+    (Join-Path $android 'src\pl\endozero\endodeck\TapoClient.java')
+)
+& javac -source 8 -target 8 -encoding UTF-8 -classpath $platform -d (Join-Path $build 'classes') $sources
 if ($LASTEXITCODE -ne 0) { throw 'javac failed to compile the application.' }
 
 $classFiles = Get-ChildItem -Path (Join-Path $build 'classes') -Recurse -Filter '*.class' | ForEach-Object FullName

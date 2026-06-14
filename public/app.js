@@ -405,12 +405,22 @@ function cacheAccent(accent) {
   try { window.NativeDeck?.cacheAccent(accent); } catch { }
 }
 
+async function syncOfflineBundle() {
+  try {
+    const response = await fetch("/api/offline-bundle", { cache: "no-store" });
+    if (!response.ok) return;
+    const bundle = await response.json();
+    window.NativeDeck?.cacheOfflineBundle?.(JSON.stringify(bundle));
+  } catch { }
+}
+
 function applyConfig(nextConfig, resetTimers = true) {
   config = nextConfig;
   if (!config.pages[currentPage]) currentPage = "home";
   document.documentElement.style.setProperty("--accent", config.accent);
   $("#deck-title").textContent = config.title;
   cacheAccent(config.accent);
+  syncOfflineBundle();
   render(currentPage);
   renderNowPlaying();
   if (resetTimers) resetIdle();
@@ -506,7 +516,7 @@ async function boot() {
   updateState(await fetch("/api/state").then((response) => response.json())); updateClock(); loadWeather(); resetIdle();
   const events = new EventSource("/api/events"); events.addEventListener("message", (event) => updateState(JSON.parse(event.data)));
   events.addEventListener("config", (event) => applyConfig(JSON.parse(event.data)));
-  setInterval(updateClock, 1000); setInterval(loadWeather, 15 * 60_000);
+  setInterval(updateClock, 1000); setInterval(loadWeather, 15 * 60_000); setInterval(syncOfflineBundle, 60_000);
   document.addEventListener("pointerdown", wakeFromScreensaver, { capture: true, passive: false });
   document.addEventListener("touchstart", wakeFromScreensaver, { capture: true, passive: false });
   document.addEventListener("click", suppressWakeClick, { capture: true, passive: false });
