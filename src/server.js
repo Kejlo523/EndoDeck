@@ -216,7 +216,7 @@ async function refreshSystemStats() {
 }
 
 refreshSystemStats();
-setInterval(refreshSystemStats, 8000);
+setInterval(refreshSystemStats, 4000);
 
 process.on("SIGINT", () => {
   adb.stop();

@@ -1,15 +1,9 @@
 import { execFile } from "node:child_process";
 import { cpus, freemem, totalmem } from "node:os";
-import { readdir, stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
-const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-const projectsRoot = dirname(projectRoot);
 let previousCpu = cpuTimes();
-let projectCache = { at: 0, value: [] };
 let cpuTemperatureCache = { at: 0, value: null };
 
 function cpuTimes() {
@@ -57,42 +51,19 @@ async function networkStats() {
   } catch { return { received: 0, sent: 0 }; }
 }
 
-async function projectStats() {
-  if (Date.now() - projectCache.at < 30_000) return projectCache.value;
-  const entries = await readdir(projectsRoot, { withFileTypes: true }).catch(() => []);
-  const repositories = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const path = join(projectsRoot, entry.name);
-    if (!(await stat(join(path, ".git")).catch(() => null))) continue;
-    try {
-      const [{ stdout: branch }, { stdout: statusText }] = await Promise.all([
-        execFileAsync("git.exe", ["-C", path, "branch", "--show-current"], { windowsHide: true, timeout: 2500 }),
-        execFileAsync("git.exe", ["-C", path, "status", "--porcelain"], { windowsHide: true, timeout: 3500 })
-      ]);
-      const dirty = statusText.split(/\r?\n/).filter(Boolean).length;
-      repositories.push({ name: entry.name, branch: branch.trim() || "detached", dirty, clean: dirty === 0 });
-    } catch { }
-  }
-  projectCache = { at: Date.now(), value: repositories.slice(0, 3) };
-  return projectCache.value;
-}
-
 export async function getSystemStats() {
   const memoryTotal = totalmem();
   const memoryUsed = memoryTotal - freemem();
-  const [cpuTemp, gpu, network, projects] = await Promise.all([
+  const [cpuTemp, gpu, network] = await Promise.all([
     cpuTemperature(),
     gpuStats(),
-    networkStats(),
-    projectStats()
+    networkStats()
   ]);
   return {
     cpu: { usage: cpuUsage(), temperature: cpuTemp },
     gpu,
     memory: { used: memoryUsed, total: memoryTotal, usage: Math.round(memoryUsed / memoryTotal * 100) },
     network,
-    projects,
     updatedAt: Date.now()
   };
 }

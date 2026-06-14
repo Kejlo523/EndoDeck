@@ -273,20 +273,29 @@ function gibibytes(bytes) {
   return `${(Number(bytes || 0) / 1024 ** 3).toFixed(1)} GB`;
 }
 
+const metricRingCircumference = 100.53;
+function setMetricRing(selector, value) {
+  const numeric = Number(value);
+  const percent = Number.isFinite(numeric) ? Math.max(0, Math.min(100, numeric)) : 0;
+  $(selector).style.strokeDashoffset = String(metricRingCircumference * (1 - percent / 100));
+}
+
 function renderSystemStats(stats) {
   if (!stats) return;
-  $("#metric-cpu").textContent = `${stats.cpu?.usage ?? "--"}%`;
+  const cpuUsage = stats.cpu?.usage;
+  const gpuUsage = stats.gpu?.usage;
+  const ramUsage = stats.memory?.usage;
+  $("#metric-cpu").textContent = `${cpuUsage ?? "--"}%`;
   $("#metric-cpu-temp").textContent = stats.cpu?.temperature ? `${stats.cpu.temperature}°C` : "TEMP. —";
-  $("#metric-gpu").textContent = `${stats.gpu?.usage ?? "--"}%`;
+  $("#metric-gpu").textContent = `${gpuUsage ?? "--"}%`;
   $("#metric-gpu-temp").textContent = stats.gpu?.temperature ? `${stats.gpu.temperature}°C` : "TEMP. —";
-  $("#metric-ram").textContent = `${stats.memory?.usage ?? "--"}%`;
+  $("#metric-ram").textContent = `${ramUsage ?? "--"}%`;
   $("#metric-ram-used").textContent = gibibytes(stats.memory?.used);
+  setMetricRing("#metric-cpu-ring", cpuUsage);
+  setMetricRing("#metric-gpu-ring", gpuUsage);
+  setMetricRing("#metric-ram-ring", ramUsage);
   $("#metric-net-down").textContent = `↓ ${dataRate(stats.network?.received)}`;
   $("#metric-net-up").textContent = `↑ ${dataRate(stats.network?.sent)}`;
-  const project = stats.projects?.[0];
-  $("#metric-project-name").textContent = project?.name?.toUpperCase() ?? "BRAK";
-  $("#metric-project-state").textContent = project ? `${project.branch} · ${project.clean ? "CZYSTY" : `${project.dirty} ZMIANY`}` : "PROJEKTÓW";
-  $(".metric-project").classList.toggle("is-dirty", Boolean(project && !project.clean));
 }
 
 function updateClock() {
@@ -339,7 +348,7 @@ function screensaverBrightness(weather, offline = false) {
   const today = weather?.daily?.find((day) => day.date === date) ?? weather?.daily?.[0];
   const sunrise = eventMinute(today?.sunrise);
   const sunset = eventMinute(today?.sunset);
-  const levels = offline ? { night: .052, day: .082, twilight: .080 } : { night: .062, day: .092, twilight: .090 };
+  const levels = offline ? { night: .052, day: .094, twilight: .080 } : { night: .062, day: .106, twilight: .090 };
   if (sunrise === null || sunset === null) return levels.night;
   if (Math.abs(minute - sunrise) <= 45 || Math.abs(minute - sunset) <= 45) return levels.twilight;
   return minute > sunrise && minute < sunset ? levels.day : levels.night;

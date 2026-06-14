@@ -18,6 +18,28 @@ const defaults = {
 let cachedSettings;
 let settingsMtime = -1;
 let stateCache = { at: 0, value: {} };
+let tapoAuthBlock = null;
+
+function isTapoAuthError(message) {
+  return /Nieprawidlowy e-mail|Third-Party Compatibility|HASH_MISMATCH|LOGIN_ERROR|FORBIDDEN|Invalid credentials/i.test(String(message ?? ""));
+}
+
+function blockedTapoState() {
+  return {
+    active: false,
+    available: false,
+    provider: "tapo",
+    source: "local-device",
+    error: `${tapoAuthBlock} Automatyczne proby Tapo zostaly zatrzymane.`
+  };
+}
+
+function blockTapo(settings, error, result) {
+  tapoAuthBlock = String(error);
+  for (const [alias, device] of Object.entries(settings.devices)) {
+    if (device.provider === "tapo") result[alias] = blockedTapoState();
+  }
+}
 
 function normalizeSettings(value = {}) {
   const devices = {};
@@ -102,21 +124,28 @@ export async function saveLocalDeviceSetup(input = {}) {
   cachedSettings = next;
   settingsMtime = (await stat(settingsPath)).mtimeMs;
   stateCache = { at: 0, value: {} };
+  tapoAuthBlock = null;
   return getLocalDeviceSetup();
 }
 
 export async function getLocalDeviceStates(aliases = [], { force = false } = {}) {
   const wanted = [...new Set(aliases.map(String))];
+  if (force) tapoAuthBlock = null;
   if (!force && Date.now() - stateCache.at < 7000 && wanted.every((alias) => stateCache.value[alias])) {
     return Object.fromEntries(wanted.map((alias) => [alias, stateCache.value[alias]]));
   }
   const settings = await loadSettings();
   const result = {};
-  const devices = [];
+  const tapoDevices = [];
+  const otherDevices = [];
   for (const alias of wanted) {
     const device = settings.devices[alias];
     if (!device) continue;
-    if (isConfigured(device, settings)) devices.push({ alias, ...device });
+    if (isConfigured(device, settings)) {
+      const entry = { alias, ...device };
+      if (device.provider === "tapo") tapoDevices.push(entry);
+      else otherDevices.push(entry);
+    }
     else result[alias] = {
       active: false,
       available: false,
@@ -125,9 +154,19 @@ export async function getLocalDeviceStates(aliases = [], { force = false } = {})
       error: device.provider === "tapo" ? "Brak danych konta Tapo" : "Brak lokalnego klucza Tuya"
     };
   }
-  if (devices.length) Object.assign(result, await runBridge({ command: "status", settings, devices }));
+  if (otherDevices.length) Object.assign(result, await runBridge({ command: "status", settings, devices: otherDevices }));
+  if (tapoDevices.length && tapoAuthBlock) {
+    for (const device of tapoDevices) result[device.alias] = blockedTapoState();
+  } else if (tapoDevices.length) {
+    const [probe, ...remaining] = tapoDevices;
+    const probeResult = await runBridge({ command: "status", settings, devices: [probe] });
+    Object.assign(result, probeResult);
+    const probeError = probeResult[probe.alias]?.error;
+    if (isTapoAuthError(probeError)) blockTapo(settings, probeError, result);
+    else if (remaining.length) Object.assign(result, await runBridge({ command: "status", settings, devices: remaining }));
+  }
   stateCache = { at: Date.now(), value: { ...stateCache.value, ...result } };
-  return result;
+  return Object.fromEntries(wanted.filter((alias) => result[alias]).map((alias) => [alias, result[alias]]));
 }
 
 export async function testLocalDevices() {
@@ -139,7 +178,17 @@ export async function toggleLocalDevice(alias) {
   const settings = await loadSettings();
   const device = settings.devices[String(alias)];
   if (!device) throw new Error("Nie znaleziono lokalnego urządzenia");
-  const result = await runBridge({ command: "toggle", settings, device: { alias: String(alias), ...device } }, 15_000);
-  stateCache = { at: Date.now(), value: { ...stateCache.value, [alias]: result } };
-  return result;
+  if (device.provider === "tapo" && tapoAuthBlock) throw new Error(`${tapoAuthBlock} Automatyczne proby Tapo zostaly zatrzymane; zapisz dane konta albo uruchom test recznie.`);
+  try {
+    const result = await runBridge({ command: "toggle", settings, device: { alias: String(alias), ...device } }, 15_000);
+    stateCache = { at: Date.now(), value: { ...stateCache.value, [alias]: result } };
+    return result;
+  } catch (error) {
+    if (device.provider === "tapo" && isTapoAuthError(error.message)) {
+      const blocked = {};
+      blockTapo(settings, error.message, blocked);
+      stateCache = { at: Date.now(), value: { ...stateCache.value, ...blocked } };
+    }
+    throw error;
+  }
 }
