@@ -3,6 +3,7 @@
 endodeck.log
 endodeck-error.log
 tuya.local.json
+devices.local.json
 
 # Local Android signing material
 android/*.keystore

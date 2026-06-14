@@ -11,6 +11,7 @@ Lokalny Stream Deck z telefonu Huawei P8 Lite, sterowany przez USB i `adb revers
 - wybór miasta z listy lub bezpośrednio z mapy OpenStreetMap
 - regulowany kolor akcentu, płynne przyciemnienie po ustawionym czasie i wygaszacz z pogodą na siedem dni oraz sekundami przy zegarze
 - pasek stanu z połączeniem USB, prądem baterii i poziomem naładowania
+- lokalne sterowanie urządzeniami Tapo P100 i Tuya bez wysyłania poleceń przez chmurę
 - krótki komunikat o niedostępnym PC, a następnie lokalny wygaszacz z pogodą zapisaną w cache telefonu
 - obniżenie jasności przez natywne API Androida oraz okresowe przesuwanie i zamianę elementów wygaszacza
 - natychmiastowa synchronizacja koloru ze Studio oraz adaptacyjna jasność wygaszacza zależna od wschodu i zachodu słońca
@@ -18,6 +19,16 @@ Lokalny Stream Deck z telefonu Huawei P8 Lite, sterowany przez USB i `adb revers
 - moduły Magisk do uśpienia po odłączeniu, wyłączenia radia, DT2W i usunięcia blokady
 - dwuczęściowa obudowa P8 Lite gotowa do druku 3D
 - kafle Tuya Cloud do sterowania włącznikami Wi-Fi z rzeczywistym stanem urządzeń
+
+## Urządzenia LAN
+
+Zainstaluj most protokołów jednorazowo:
+
+```powershell
+python -m pip install -r requirements-local-devices.txt
+```
+
+Po uruchomieniu EndoDeck otwórz `http://127.0.0.1:8765/devices.html`. Strona pokazuje pięć wykrytych urządzeń w sieci `192.168.11.0/24`. Gniazdka Tapo P100 wymagają danych konta Tapo do lokalnego szyfrowanego połączenia, a przełączniki Tuya wymagają swoich `local_key`. Dane trafiają wyłącznie do ignorowanego przez Git pliku `devices.local.json`.
 
 ## Uruchomienie
 

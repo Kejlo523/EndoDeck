@@ -10,6 +10,7 @@ import { getControlStates } from "./control-status.js";
 import { getNowPlaying } from "./now-playing.js";
 import { reversePlace, searchPlaces } from "./geocode.js";
 import { getTuyaSetup } from "./tuya.js";
+import { getLocalDeviceSetup, saveLocalDeviceSetup, testLocalDevices } from "./local-devices.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const publicDir = join(root, "public");
@@ -118,6 +119,15 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/api/tuya") {
       return sendJson(response, 200, await getTuyaSetup());
+    }
+    if (request.method === "GET" && url.pathname === "/api/local-devices") {
+      return sendJson(response, 200, await getLocalDeviceSetup());
+    }
+    if (request.method === "PUT" && url.pathname === "/api/local-devices") {
+      return sendJson(response, 200, await saveLocalDeviceSetup(await bodyJson(request)));
+    }
+    if (request.method === "POST" && url.pathname === "/api/local-devices/test") {
+      return sendJson(response, 200, await testLocalDevices());
     }
     if (request.method === "POST" && url.pathname === "/api/audio") {
       const body = await bodyJson(request);

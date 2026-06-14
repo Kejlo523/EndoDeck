@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>EndoDeck · Urządzenia LAN</title>
+  <link rel="stylesheet" href="/devices.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><i></i><span>ENDO DECK</span></a>
+    <nav><a href="/editor.html">Studio</a><a href="/">Deck</a></nav>
+  </header>
+  <main>
+    <section class="intro">
+      <p class="eyebrow">STEROWANIE BEZ CHMURY</p>
+      <h1>Urządzenia w sieci lokalnej</h1>
+      <p>EndoDeck łączy się z nimi bezpośrednio przez Wi-Fi. Sekrety zostają wyłącznie na tym komputerze.</p>
+      <div class="actions"><button id="test-devices" class="secondary">SPRAWDŹ POŁĄCZENIE</button><button id="save-devices">ZAPISZ USTAWIENIA</button></div>
+    </section>
+
+    <section class="credentials">
+      <div><span class="step">01</span><h2>Konto Tapo</h2><p>Potrzebne tylko do lokalnego, szyfrowanego połączenia z P100.</p></div>
+      <label>E-mail konta Tapo<input id="tapo-user" type="email" autocomplete="username" placeholder="konto@example.com"></label>
+      <label>Hasło<input id="tapo-password" type="password" autocomplete="current-password" placeholder="Pozostaw puste, aby nie zmieniać"><small id="password-state"></small></label>
+    </section>
+
+    <section class="device-section">
+      <header><div><span class="step">02</span><h2>Wykryte urządzenia</h2></div><p id="device-count">Skan sieci 192.168.11.0/24</p></header>
+      <div id="device-grid" class="device-grid"></div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="/devices.js"></script>
+</body>
+</html>

@@ -146,18 +146,14 @@
           }
         },
         {
-          "id": "screenshot",
-          "label": "WYCINEK",
-          "hint": "Win Shift S",
-          "icon": "crop",
+          "id": "home-page-dom",
+          "label": "DOM",
+          "hint": "Urządzenia lokalne",
+          "icon": "house",
           "tone": "amber",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "WIN",
-              "SHIFT",
-              "S"
-            ]
+            "type": "page",
+            "page": "dom"
           }
         },
         {
@@ -170,6 +166,80 @@
             "type": "page",
             "page": "audio"
           }
+        }
+      ]
+    },
+    "dom": {
+      "label": "Dom",
+      "buttons": [
+        {
+          "id": "dom-tapo-109",
+          "label": "TAPO 109",
+          "hint": "Gniazdko P100",
+          "icon": "plug",
+          "tone": "green",
+          "action": { "type": "localDeviceToggle", "device": "tapo-109" },
+          "status": { "type": "localDevice", "device": "tapo-109" }
+        },
+        {
+          "id": "dom-tapo-116",
+          "label": "TAPO 116",
+          "hint": "Gniazdko P100",
+          "icon": "plug",
+          "tone": "green",
+          "action": { "type": "localDeviceToggle", "device": "tapo-116" },
+          "status": { "type": "localDevice", "device": "tapo-116" }
+        },
+        {
+          "id": "dom-tapo-142",
+          "label": "TAPO 142",
+          "hint": "Gniazdko P100",
+          "icon": "plug",
+          "tone": "green",
+          "action": { "type": "localDeviceToggle", "device": "tapo-142" },
+          "status": { "type": "localDevice", "device": "tapo-142" }
+        },
+        {
+          "id": "dom-tuya-147",
+          "label": "DUŻY POKÓJ",
+          "hint": "Tuya · 192.168.11.147",
+          "icon": "wifi",
+          "tone": "blue",
+          "action": { "type": "localDeviceToggle", "device": "tuya-147" },
+          "status": { "type": "localDevice", "device": "tuya-147" }
+        },
+        {
+          "id": "dom-tuya-148",
+          "label": "MAŁY POKÓJ",
+          "hint": "Tuya · 192.168.11.148",
+          "icon": "wifi",
+          "tone": "blue",
+          "action": { "type": "localDeviceToggle", "device": "tuya-148" },
+          "status": { "type": "localDevice", "device": "tuya-148" }
+        },
+        {
+          "id": "screenshot",
+          "label": "WYCINEK",
+          "hint": "Win Shift S",
+          "icon": "crop",
+          "tone": "amber",
+          "action": { "type": "hotkey", "keys": ["WIN", "SHIFT", "S"] }
+        },
+        {
+          "id": "dom-audio",
+          "label": "MIKSER",
+          "hint": "Aplikacje i system",
+          "icon": "sliders",
+          "tone": "accent",
+          "action": { "type": "page", "page": "audio" }
+        },
+        {
+          "id": "dom-home",
+          "label": "WRÓĆ",
+          "hint": "Codzienny",
+          "icon": "back",
+          "tone": "neutral",
+          "action": { "type": "page", "page": "home" }
         }
       ]
     },

@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getAudioSnapshot } from "./audio.js";
 import { getTuyaStates } from "./tuya.js";
+import { getLocalDeviceStates } from "./local-devices.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -25,6 +26,16 @@ function configuredTuyaDevices(config) {
   return [...aliases];
 }
 
+function configuredLocalDevices(config) {
+  const aliases = new Set();
+  for (const page of Object.values(config.pages ?? {})) {
+    for (const button of page.buttons ?? []) {
+      if (button.status?.type === "localDevice" && button.status.device) aliases.add(String(button.status.device));
+    }
+  }
+  return [...aliases];
+}
+
 async function runningProcesses() {
   const { stdout } = await execFileAsync("tasklist.exe", ["/FO", "CSV", "/NH"], { windowsHide: true, timeout: 5000 });
   const result = new Set();
@@ -36,10 +47,11 @@ async function runningProcesses() {
 }
 
 export async function getControlStates(config) {
-  const [processes, audio, tuya] = await Promise.all([
+  const [processes, audio, tuya, localDevices] = await Promise.all([
     runningProcesses().catch(() => new Set()),
     getAudioSnapshot().catch(() => ({ muted: false, microphoneMuted: false, sessions: [] })),
-    getTuyaStates(configuredTuyaDevices(config)).catch(() => ({}))
+    getTuyaStates(configuredTuyaDevices(config)).catch(() => ({})),
+    getLocalDeviceStates(configuredLocalDevices(config)).catch(() => ({}))
   ]);
   const wanted = configuredProcesses(config);
   const processState = Object.fromEntries([...wanted].map((name) => [name, processes.has(name)]));
@@ -58,6 +70,7 @@ export async function getControlStates(config) {
         controls[button.id] = { active: sessions.length > 0 && sessions.every((session) => session.muted), available: sessions.length > 0, source: "windows-audio" };
       }
       if (status.type === "tuya") controls[button.id] = tuya[String(status.device)] ?? { active: false, available: false, source: "tuya" };
+      if (status.type === "localDevice") controls[button.id] = localDevices[String(status.device)] ?? { active: false, available: false, source: "local-device" };
     }
   }
   return controls;
