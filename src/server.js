@@ -159,9 +159,11 @@ const server = createServer(async (request, response) => {
         publish();
         return sendJson(response, 200, { ok: true, ...result });
       } catch (error) {
-        state.error = error.message;
+        const message = error.message;
+        state.error = message;
         publish();
-        return sendJson(response, 500, { ok: false, error: error.message });
+        state.error = null;
+        return sendJson(response, 500, { ok: false, error: message });
       }
     }
 

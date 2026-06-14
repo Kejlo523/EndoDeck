@@ -27,12 +27,20 @@ let burnInTimer;
 let screensaverActive = false;
 let latestWeather;
 let suppressDeckClickUntil = 0;
+let lastShownError = null;
 
 function showToast(message, error = false) {
   clearTimeout(toastTimer);
   toast.textContent = message;
   toast.className = `toast show${error ? " error" : ""}`;
   toastTimer = setTimeout(() => toast.className = "toast", 1800);
+}
+
+function showErrorOnce(message) {
+  const normalized = String(message || "Błąd akcji");
+  if (normalized === lastShownError) return;
+  lastShownError = normalized;
+  showToast(normalized, true);
 }
 
 function controlActive(id) {
@@ -103,7 +111,7 @@ async function updateVolume(target, id, volume) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Nie udało się zmienić głośności");
     navigator.vibrate?.(12);
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { showErrorOnce(error.message); }
 }
 
 async function loadMixer(board) {
@@ -142,9 +150,10 @@ async function trigger(button, element) {
     const response = await fetch("/api/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: button.id }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Błąd akcji");
+    lastShownError = null;
     if (result.page) render(result.page);
     if (result.message) showToast(result.message);
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { showErrorOnce(error.message); }
 }
 
 function openSettings() {
@@ -178,7 +187,7 @@ settingsForm.addEventListener("submit", async (event) => {
     resetIdle();
     closeSettings();
     showToast("Zapisano ustawienia");
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { showErrorOnce(error.message); }
 });
 
 $("#settings-trigger").addEventListener("click", openSettings); $("#settings-close").addEventListener("click", closeSettings);
@@ -242,7 +251,8 @@ function updateState(state) {
   $("#saver-power").textContent = $("#power-status").textContent; $("#saver-battery").textContent = $("#battery-status").textContent;
   applyControlStates();
   renderNowPlaying();
-  if (state.error) showToast(state.error, true);
+  if (state.error) showErrorOnce(state.error);
+  else lastShownError = null;
 }
 
 function updateClock() {
@@ -373,4 +383,4 @@ async function boot() {
   for (const event of ["pointerdown", "touchstart", "keydown"]) document.addEventListener(event, resetIdle, { passive: true });
 }
 
-boot().catch((error) => showToast(error.message, true));
+boot().catch((error) => showErrorOnce(error.message));
