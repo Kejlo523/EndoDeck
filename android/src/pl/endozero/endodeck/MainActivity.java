@@ -18,6 +18,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -30,10 +31,20 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private boolean deckVisible;
     private boolean destroyed;
+    private boolean nightStandby;
     private SharedPreferences preferences;
     private final ExecutorService deviceExecutor = Executors.newFixedThreadPool(3);
     private final ConcurrentHashMap<String, TapoClient> tapoClients = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> tapoStates = new ConcurrentHashMap<>();
+    private static final String NIGHT_MARKER = "/data/local/tmp/endodeck-night-standby";
+
+    private final Runnable midnightStandby = new Runnable() {
+        @Override
+        public void run() {
+            if (!deckVisible) enterNightStandby();
+            scheduleNextMidnight();
+        }
+    };
 
     private final class DeckBridge {
         @JavascriptInterface
@@ -211,13 +222,14 @@ public final class MainActivity extends Activity {
                 final boolean serverAvailable = available;
                 handler.post(() -> {
                     if (destroyed || isFinishing()) return;
-                    if (serverAvailable && !deckVisible) {
-                        webView.loadUrl(DECK_URL);
+                    if (serverAvailable) {
+                        if (nightStandby) leaveNightStandby();
+                        if (!deckVisible) webView.loadUrl(DECK_URL);
                     } else if (!serverAvailable && deckVisible) {
                         deckVisible = false;
                         webView.loadUrl(OFFLINE_URL);
                     }
-                    handler.postDelayed(connectionProbe, serverAvailable ? 3000 : 1200);
+                    handler.postDelayed(connectionProbe, nightStandby ? 15000 : serverAvailable ? 3000 : 1200);
                 });
             }).start();
         }
@@ -229,6 +241,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         preferences = getSharedPreferences("endodeck", Context.MODE_PRIVATE);
+        nightStandby = preferences.getBoolean("night_standby", false);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
@@ -267,6 +280,55 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
         webView.loadUrl(OFFLINE_URL);
         handler.post(connectionProbe);
+        scheduleNextMidnight();
+        if (nightStandby) handler.postDelayed(this::enterNightStandby, 1800);
+    }
+
+    private void scheduleNextMidnight() {
+        handler.removeCallbacks(midnightStandby);
+        Calendar next = Calendar.getInstance();
+        next.add(Calendar.DAY_OF_YEAR, 1);
+        next.set(Calendar.HOUR_OF_DAY, 0);
+        next.set(Calendar.MINUTE, 0);
+        next.set(Calendar.SECOND, 0);
+        next.set(Calendar.MILLISECOND, 0);
+        handler.postDelayed(midnightStandby, Math.max(1000L, next.getTimeInMillis() - System.currentTimeMillis()));
+    }
+
+    private void enterNightStandby() {
+        if (destroyed || deckVisible) return;
+        nightStandby = true;
+        preferences.edit().putBoolean("night_standby", true).apply();
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (webView != null) {
+            webView.onPause();
+            webView.pauseTimers();
+        }
+        setWindowBrightness(0.01f);
+        runRootCommand("touch " + NIGHT_MARKER + "; settings put global stay_on_while_plugged_in 0; settings put system screen_off_timeout 15000; svc wifi disable; input keyevent 223; dumpsys deviceidle force-idle");
+    }
+
+    private void leaveNightStandby() {
+        nightStandby = false;
+        preferences.edit().putBoolean("night_standby", false).apply();
+        runRootCommand("rm -f " + NIGHT_MARKER + "; dumpsys deviceidle unforce; svc wifi enable; input keyevent 224; sleep 1; if dumpsys power | grep -q 'mWakefulness=Asleep'; then input keyevent 26; fi; wm dismiss-keyguard");
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (webView != null) {
+            webView.resumeTimers();
+            webView.onResume();
+        }
+        setWindowBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE);
+    }
+
+    private void runRootCommand(final String command) {
+        new Thread(() -> {
+            try {
+                Process process = Runtime.getRuntime().exec(new String[] { "su", "-c", command });
+                process.waitFor();
+            } catch (Exception error) {
+                android.util.Log.w("EndoDeckPower", "Root command failed", error);
+            }
+        }).start();
     }
 
     private void showOffline() {
@@ -296,6 +358,12 @@ public final class MainActivity extends Activity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) enterImmersiveMode();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (nightStandby) handler.postDelayed(this::enterNightStandby, 1800);
     }
 
     @Override

@@ -7,6 +7,7 @@ USB_STATE=/sys/class/android_usb/android0/state
 LOG=/data/local/tmp/endodeck-power.log
 PIDFILE=/data/local/tmp/endodeck-power.pid
 CHARGER_ENABLE=/sys/class/hw_power/charger/charge_data/enable_charger
+NIGHT_MARKER=/data/local/tmp/endodeck-night-standby
 
 # Old Magisk releases may reap long-running module scripts after late_start.
 # Detach a dedicated worker so USB monitoring survives the boot stage.
@@ -93,13 +94,28 @@ restore_charging() {
 }
 
 wake_deck() {
+    rm -f "$NIGHT_MARKER"
     dumpsys deviceidle unforce >/dev/null 2>&1
     settings put global stay_on_while_plugged_in 2
     settings put system screen_off_timeout 1800000
     input keyevent 224
+    sleep 1
+    if dumpsys power 2>/dev/null | grep -q 'mWakefulness=Asleep'; then
+        input keyevent 26
+    fi
     wm dismiss-keyguard >/dev/null 2>&1
     am start -n "$DECK_COMPONENT" >/dev/null 2>&1
     log_line "PC host connected; deck awake"
+}
+
+night_sleep_deck() {
+    radios_off
+    settings put global stay_on_while_plugged_in 0
+    settings put system screen_off_timeout 15000
+    input keyevent 223
+    sleep 2
+    dumpsys deviceidle force-idle >/dev/null 2>&1
+    log_line "Midnight standby active; waiting only for PC USB host"
 }
 
 wake_offline_saver() {
@@ -125,7 +141,6 @@ while [ "$(getprop sys.boot_completed)" != "1" ]; do
     sleep 2
 done
 
-deck_radios
 last_state=unknown
 disconnected_at=0
 sleep_applied=0
@@ -139,9 +154,16 @@ while true; do
         disconnected_at=0
         sleep_applied=0
         if [ "$last_state" != "connected" ]; then
-            if [ "$KEEP_AIRPLANE_CONNECTED" = "1" ]; then deck_radios; fi
             wake_deck
+            if [ "$KEEP_AIRPLANE_CONNECTED" = "1" ]; then deck_radios; fi
             last_state=connected
+        fi
+    elif [ -f "$NIGHT_MARKER" ]; then
+        disconnected_at=0
+        sleep_applied=1
+        if [ "$last_state" != "night-standby" ]; then
+            night_sleep_deck
+            last_state=night-standby
         fi
     elif [ "$POWERED_OFFLINE_SCREENSAVER" = "1" ] && has_external_power; then
         disconnected_at=0
