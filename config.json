@@ -4,9 +4,7 @@
   "accent": "#ddc2ff",
   "ui": {
     "dimAfterSeconds": 20,
-    "screensaverAfterSeconds": 30,
-    "showNowPlaying": true,
-    "showEqualizer": true
+    "screensaverAfterSeconds": 30
   },
   "weather": {
     "city": "Szczecin",
@@ -174,30 +172,48 @@
       "buttons": [
         {
           "id": "dom-tapo-109",
-          "label": "TAPO 109",
+          "label": "Głośniki",
           "hint": "Gniazdko P100",
-          "icon": "plug",
+          "icon": "headphones",
           "tone": "green",
-          "action": { "type": "localDeviceToggle", "device": "tapo-109" },
-          "status": { "type": "localDevice", "device": "tapo-109" }
+          "action": {
+            "type": "localDeviceToggle",
+            "device": "tapo-109"
+          },
+          "status": {
+            "type": "localDevice",
+            "device": "tapo-109"
+          }
         },
         {
           "id": "dom-tapo-116",
-          "label": "TAPO 116",
+          "label": "Choinka",
           "hint": "Gniazdko P100",
           "icon": "plug",
           "tone": "green",
-          "action": { "type": "localDeviceToggle", "device": "tapo-116" },
-          "status": { "type": "localDevice", "device": "tapo-116" }
+          "action": {
+            "type": "localDeviceToggle",
+            "device": "tapo-116"
+          },
+          "status": {
+            "type": "localDevice",
+            "device": "tapo-116"
+          }
         },
         {
           "id": "dom-tapo-142",
-          "label": "TAPO 142",
+          "label": "Komputer",
           "hint": "Gniazdko P100",
           "icon": "plug",
           "tone": "green",
-          "action": { "type": "localDeviceToggle", "device": "tapo-142" },
-          "status": { "type": "localDevice", "device": "tapo-142" }
+          "action": {
+            "type": "localDeviceToggle",
+            "device": "tapo-142"
+          },
+          "status": {
+            "type": "localDevice",
+            "device": "tapo-142"
+          }
         },
         {
           "id": "screenshot",
@@ -205,7 +221,14 @@
           "hint": "Win Shift S",
           "icon": "crop",
           "tone": "amber",
-          "action": { "type": "hotkey", "keys": ["WIN", "SHIFT", "S"] }
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "WIN",
+              "SHIFT",
+              "S"
+            ]
+          }
         },
         {
           "id": "dom-audio",
@@ -213,7 +236,10 @@
           "hint": "Aplikacje i system",
           "icon": "sliders",
           "tone": "accent",
-          "action": { "type": "page", "page": "audio" }
+          "action": {
+            "type": "page",
+            "page": "audio"
+          }
         },
         {
           "id": "dom-home",
@@ -221,7 +247,10 @@
           "hint": "Codzienny",
           "icon": "back",
           "tone": "neutral",
-          "action": { "type": "page", "page": "home" }
+          "action": {
+            "type": "page",
+            "page": "home"
+          }
         }
       ]
     },
