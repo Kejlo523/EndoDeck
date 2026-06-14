@@ -372,9 +372,9 @@ function renderSystemStats(stats) {
   const gpuUsage = stats.gpu?.usage;
   const ramUsage = stats.memory?.usage;
   $("#metric-cpu").textContent = `${cpuUsage ?? "--"}%`;
-  $("#metric-cpu-temp").textContent = stats.cpu?.temperature ? `${stats.cpu.temperature}°C` : "TEMP. —";
+  $("#metric-cpu-temp").textContent = stats.cpu?.temperature ? `${stats.cpu.temperature}°C` : "—";
   $("#metric-gpu").textContent = `${gpuUsage ?? "--"}%`;
-  $("#metric-gpu-temp").textContent = stats.gpu?.temperature ? `${stats.gpu.temperature}°C` : "TEMP. —";
+  $("#metric-gpu-temp").textContent = stats.gpu?.temperature ? `${stats.gpu.temperature}°C` : "—";
   $("#metric-ram").textContent = `${ramUsage ?? "--"}%`;
   $("#metric-ram-used").textContent = gibibytes(stats.memory?.used);
   setMetricRing("#metric-cpu-ring", cpuUsage);
