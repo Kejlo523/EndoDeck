@@ -3,34 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>EndoDeck · Urządzenia LAN</title>
+  <title>EndoDeck Studio · Urządzenia LAN</title>
+  <link rel="stylesheet" href="/editor.css">
   <link rel="stylesheet" href="/devices.css">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/"><i></i><span>ENDO DECK</span></a>
-    <nav><a href="/editor.html">Studio</a><a href="/">Deck</a></nav>
+  <header class="studio-header">
+    <div class="studio-brand"><span></span><div><strong>ENDO DECK</strong><small>LOCAL DEVICE REGISTRY</small></div></div>
+    <div class="header-status"><i></i><span id="header-status">Skan sieci lokalnej</span></div>
+    <div class="header-actions">
+      <a href="/editor.html">STUDIO</a>
+      <a href="/">PODGLĄD DECKA</a>
+      <button id="save-devices" type="button">ZAPISZ USTAWIENIA</button>
+    </div>
   </header>
-  <main>
-    <section class="intro">
-      <p class="eyebrow">STEROWANIE BEZ CHMURY</p>
-      <h1>Urządzenia w sieci lokalnej</h1>
-      <p>EndoDeck łączy się z nimi bezpośrednio przez Wi-Fi. Sekrety zostają wyłącznie na tym komputerze.</p>
-      <div class="actions"><button id="test-devices" class="secondary">SPRAWDŹ POŁĄCZENIE</button><button id="save-devices">ZAPISZ USTAWIENIA</button></div>
-    </section>
 
-    <section class="credentials">
-      <div><span class="step">01</span><h2>Konto Tapo</h2><p>Potrzebne tylko do lokalnego, szyfrowanego połączenia z P100.</p></div>
-      <label>E-mail konta Tapo<input id="tapo-user" type="email" autocomplete="username" placeholder="konto@example.com"></label>
-      <label>Hasło<input id="tapo-password" type="password" autocomplete="current-password" placeholder="Pozostaw puste, aby nie zmieniać"><small id="password-state"></small></label>
-    </section>
+  <main class="devices-layout">
+    <aside class="panel credentials-panel">
+      <header class="panel-title"><span>01</span><div><strong>KONTO TAPO</strong><small>Wspólne dane logowania do P100</small></div></header>
+      <div class="panel-scroll">
+        <section class="control-section">
+          <div class="section-heading"><strong>DANE LOGOWANIA</strong><span>Tylko lokalnie na tym PC</span></div>
+          <p class="devices-note">EndoDeck łączy się z gniazdkami bezpośrednio przez Wi-Fi. Sekrety nie opuszczają komputera.</p>
+          <label>E-mail konta Tapo<input id="tapo-user" type="email" autocomplete="username" placeholder="konto@example.com"></label>
+          <label>Hasło
+            <div class="password-field">
+              <input id="tapo-password" type="password" autocomplete="current-password" placeholder="Pozostaw puste, aby nie zmieniać">
+              <button type="button" id="password-toggle" class="password-toggle" aria-label="Pokaż hasło" aria-pressed="false">
+                <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.8 10.8 0 0 1 12 4c6.5 0 10 7 10 7a18.2 18.2 0 0 1-4.8 5.7M6.7 6.7C4.1 8.4 2.4 10.7 2 12s3.5 7 10 7a10.4 10.4 0 0 0 5.1-1.3"/></svg>
+              </button>
+            </div>
+            <small id="password-state"></small>
+          </label>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>DIAGNOSTYKA</strong><span>Sprawdź dostępność w LAN</span></div>
+          <button type="button" id="test-devices" class="devices-secondary">SPRAWDŹ POŁĄCZENIE</button>
+        </section>
+        <div class="connection-card devices-tip"><i></i><div><strong>THIRD-PARTY COMPATIBILITY</strong><small>W aplikacji Tapo: Ja → Usługi stron trzecich musi być włączone.</small></div></div>
+      </div>
+    </aside>
 
-    <section class="device-section">
-      <header><div><span class="step">02</span><h2>Wykryte urządzenia</h2></div><p id="device-count">Skan sieci 192.168.11.0/24</p></header>
-      <div id="device-grid" class="device-grid"></div>
+    <section class="panel devices-panel">
+      <header class="panel-title"><span>02</span><div><strong>WYKRYTE URZĄDZENIA</strong><small id="device-count">Ładowanie listy...</small></div></header>
+      <div class="panel-scroll">
+        <div id="device-grid" class="device-grid"></div>
+      </div>
     </section>
   </main>
-  <div id="toast" class="toast" role="status"></div>
+
+  <div id="toast" class="studio-toast" role="status"></div>
   <script type="module" src="/devices.js"></script>
 </body>
 </html>

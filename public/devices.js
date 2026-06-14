@@ -2,6 +2,18 @@ const $ = (selector) => document.querySelector(selector);
 let setup = { tapo: {}, devices: [] };
 let toastTimer;
 
+function applyTheme(config) {
+  const accent = config?.accent;
+  if (typeof accent === "string" && /^#[0-9a-fA-F]{6}$/.test(accent)) {
+    document.documentElement.style.setProperty("--accent", accent);
+  }
+}
+
+function watchTheme() {
+  const events = new EventSource("/api/events");
+  events.addEventListener("config", (event) => applyTheme(JSON.parse(event.data)));
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 }
@@ -10,8 +22,8 @@ function notify(message, error = false) {
   clearTimeout(toastTimer);
   const toast = $("#toast");
   toast.textContent = message;
-  toast.className = `toast show${error ? " error" : ""}`;
-  toastTimer = setTimeout(() => { toast.className = "toast"; }, 2600);
+  toast.className = `studio-toast show${error ? " error" : ""}`;
+  toastTimer = setTimeout(() => { toast.className = "studio-toast"; }, 2600);
 }
 
 function statusLabel(device, status) {
@@ -49,9 +61,13 @@ function renderDevices(states = {}) {
 }
 
 async function load() {
-  const response = await fetch("/api/local-devices");
-  if (!response.ok) throw new Error("Nie udało się odczytać urządzeń");
-  setup = await response.json();
+  const [configResponse, devicesResponse] = await Promise.all([
+    fetch("/api/config"),
+    fetch("/api/local-devices")
+  ]);
+  if (!devicesResponse.ok) throw new Error("Nie udało się odczytać urządzeń");
+  setup = await devicesResponse.json();
+  if (configResponse.ok) applyTheme(await configResponse.json());
   $("#tapo-user").value = setup.tapo.username ?? "";
   $("#password-state").textContent = setup.tapo.hasPassword ? "Hasło jest zapisane lokalnie" : "Brak zapisanego hasła";
   renderDevices();
@@ -99,4 +115,16 @@ async function testDevices() {
 
 $("#save-devices").addEventListener("click", save);
 $("#test-devices").addEventListener("click", testDevices);
+
+const passwordInput = $("#tapo-password");
+const passwordToggle = $("#password-toggle");
+passwordToggle.addEventListener("click", () => {
+  const visible = passwordInput.type === "password";
+  passwordInput.type = visible ? "text" : "password";
+  passwordToggle.classList.toggle("is-visible", visible);
+  passwordToggle.setAttribute("aria-pressed", String(visible));
+  passwordToggle.setAttribute("aria-label", visible ? "Ukryj hasło" : "Pokaż hasło");
+});
+
 load().catch((error) => notify(error.message, true));
+watchTheme();
