@@ -2,6 +2,7 @@
 
 MODDIR=${0%/*}
 . "$MODDIR/config.conf"
+: "${NIGHT_STANDBY_END_HOUR:=7}"
 
 USB_STATE=/sys/class/android_usb/android0/state
 LOG=/data/local/tmp/endodeck-power.log
@@ -56,6 +57,12 @@ deck_radios() {
 
 has_external_power() {
     dumpsys battery 2>/dev/null | grep -qE '(AC|USB|Wireless) powered: true'
+}
+
+night_window_active() {
+    current_hour=$(date '+%H' | sed 's/^0//')
+    case "$current_hour" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$current_hour" -lt "$NIGHT_STANDBY_END_HOUR" ]
 }
 
 set_charging() {
@@ -160,10 +167,19 @@ while true; do
         fi
     elif [ -f "$NIGHT_MARKER" ]; then
         disconnected_at=0
-        sleep_applied=1
-        if [ "$last_state" != "night-standby" ]; then
-            night_sleep_deck
-            last_state=night-standby
+        if night_window_active; then
+            sleep_applied=1
+            if [ "$last_state" != "night-standby" ]; then
+                night_sleep_deck
+                last_state=night-standby
+            fi
+        else
+            sleep_applied=0
+            rm -f "$NIGHT_MARKER"
+            deck_radios
+            wake_offline_saver
+            last_state=powered-offline
+            log_line "Morning standby ended at ${NIGHT_STANDBY_END_HOUR}:00"
         fi
     elif [ "$POWERED_OFFLINE_SCREENSAVER" = "1" ] && has_external_power; then
         disconnected_at=0

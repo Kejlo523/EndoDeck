@@ -37,12 +37,17 @@ public final class MainActivity extends Activity {
     private final ConcurrentHashMap<String, TapoClient> tapoClients = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> tapoStates = new ConcurrentHashMap<>();
     private static final String NIGHT_MARKER = "/data/local/tmp/endodeck-night-standby";
+    private static final int NIGHT_STANDBY_END_HOUR = 7;
 
-    private final Runnable midnightStandby = new Runnable() {
+    private final Runnable nightBoundary = new Runnable() {
         @Override
         public void run() {
-            if (!deckVisible) enterNightStandby();
-            scheduleNextMidnight();
+            if (isNightHours()) {
+                if (!deckVisible) enterNightStandby();
+            } else if (nightStandby) {
+                leaveNightStandby();
+            }
+            scheduleNextNightBoundary();
         }
     };
 
@@ -280,19 +285,29 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
         webView.loadUrl(OFFLINE_URL);
         handler.post(connectionProbe);
-        scheduleNextMidnight();
-        if (nightStandby) handler.postDelayed(this::enterNightStandby, 1800);
+        scheduleNextNightBoundary();
+        if (nightStandby) {
+            handler.postDelayed(isNightHours() ? this::enterNightStandby : this::leaveNightStandby, 1800);
+        }
     }
 
-    private void scheduleNextMidnight() {
-        handler.removeCallbacks(midnightStandby);
+    private boolean isNightHours() {
+        return Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < NIGHT_STANDBY_END_HOUR;
+    }
+
+    private void scheduleNextNightBoundary() {
+        handler.removeCallbacks(nightBoundary);
         Calendar next = Calendar.getInstance();
-        next.add(Calendar.DAY_OF_YEAR, 1);
-        next.set(Calendar.HOUR_OF_DAY, 0);
+        if (isNightHours()) {
+            next.set(Calendar.HOUR_OF_DAY, NIGHT_STANDBY_END_HOUR);
+        } else {
+            next.add(Calendar.DAY_OF_YEAR, 1);
+            next.set(Calendar.HOUR_OF_DAY, 0);
+        }
         next.set(Calendar.MINUTE, 0);
         next.set(Calendar.SECOND, 0);
         next.set(Calendar.MILLISECOND, 0);
-        handler.postDelayed(midnightStandby, Math.max(1000L, next.getTimeInMillis() - System.currentTimeMillis()));
+        handler.postDelayed(nightBoundary, Math.max(1000L, next.getTimeInMillis() - System.currentTimeMillis()));
     }
 
     private void enterNightStandby() {
@@ -363,7 +378,9 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (nightStandby) handler.postDelayed(this::enterNightStandby, 1800);
+        if (nightStandby) {
+            handler.postDelayed(isNightHours() ? this::enterNightStandby : this::leaveNightStandby, 1800);
+        }
     }
 
     @Override
