@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>EndoDeck Studio</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/editor.css">
 </head>
@@ -51,7 +52,7 @@
         <div class="two-cols"><label>Nazwa<input id="tile-label" maxlength="22"></label><label>Opis<input id="tile-hint" maxlength="38"></label></div>
         <section class="icon-editor">
           <div class="section-heading"><strong>IKONA</strong><span id="selected-icon-name">---</span></div>
-          <div class="icon-search-row"><div class="selected-icon-preview" id="selected-icon-preview"></div><input id="icon-search" type="search" placeholder="Szukaj w 140 ikonach"></div>
+          <div class="icon-search-row"><div class="selected-icon-preview" id="selected-icon-preview"></div><input id="icon-search" type="search" placeholder="Szukaj ikon po nazwie"></div>
           <div class="icon-picker-grid" id="icon-picker"></div>
         </section>
         <div class="two-cols"><label>Kolor<select id="tile-tone"><option value="accent">Akcent</option><option value="blue">Niebieski</option><option value="green">Zielony</option><option value="red">Czerwony</option><option value="amber">Bursztynowy</option><option value="violet">Fioletowy</option><option value="neutral">Szary</option></select></label><label>Typ akcji<select id="tile-type"><option value="localDeviceToggle">LAN: przełącz urządzenie</option><option value="hotkey">Skrót klawiszowy</option><option value="processHotkey">Skrót aplikacji z fokusem</option><option value="backgroundProcessHotkey">Skrót aplikacji w tle</option><option value="processAudioMute">Wycisz audio aplikacji</option><option value="microphoneMute">Mikrofon systemowy</option><option value="launch">Program / URL</option><option value="media">Multimedia</option><option value="page">Zmiana strony</option><option value="command">Polecenie</option><option value="sequence">Sekwencja JSON</option></select></label></div>

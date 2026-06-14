@@ -15,7 +15,7 @@ export function iconSvg(name, className = "") {
 
 export function renderIconPicker(container, query, selected, onSelect) {
   const clean = String(query ?? "").trim().toLowerCase();
-  const matches = iconNames.filter((name) => !clean || name.includes(clean)).slice(0, 72);
+  const matches = iconNames.filter((name) => !clean || name.includes(clean)).slice(0, 96);
   const fragment = document.createDocumentFragment();
   for (const name of matches) {
     const button = document.createElement("button");

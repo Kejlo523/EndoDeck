@@ -7,7 +7,7 @@ Lokalny Stream Deck z telefonu Huawei P8 Lite, sterowany przez USB i `adb revers
 - 12 dużych kafelków z centralnymi ikonami Font Awesome, dopasowanych do ekranu 1280 x 720
 - bezpośrednie wyciszanie sesji audio Discorda bez przełączania aktywnego okna
 - multimedia, programy, skróty Windows, sekwencje akcji i mikser głośności aplikacji
-- Studio PC do edycji kafelków, kolejności, kolorów i akcji, z wyszukiwalnym katalogiem ponad 140 ikon
+- Studio PC do edycji kafelków, kolejności, kolorów i akcji, z wyszukiwalnym katalogiem ikon pod stream deck
 - wybór miasta z listy lub bezpośrednio z mapy OpenStreetMap
 - regulowany kolor akcentu, płynne przyciemnienie po ustawionym czasie i wygaszacz z pogodą na siedem dni oraz sekundami przy zegarze
 - pasek stanu z połączeniem USB, prądem baterii i poziomem naładowania

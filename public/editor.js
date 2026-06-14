@@ -1,4 +1,4 @@
-import { iconSvg, renderIconPicker, resolveIcon } from "./icon-ui.js";
+import { iconNames, iconSvg, renderIconPicker, resolveIcon } from "./icon-ui.js";
 
 const $ = (selector) => document.querySelector(selector);
 let config;
@@ -186,7 +186,8 @@ async function boot() {
   [config, localDeviceSetup] = await Promise.all([
     fetch("/api/config").then((response) => response.json()),
     fetch("/api/local-devices").then((response) => response.json()).catch(() => ({ devices: [] }))
-  ]); loadGlobals(); renderAll(); initMap();
+  ]);
+  $("#icon-search").placeholder = `Szukaj w ${iconNames.length} ikonach`; loadGlobals(); renderAll(); initMap();
   updateConnection(await fetch("/api/state").then((response) => response.json())); new EventSource("/api/events").addEventListener("message", (event) => updateConnection(JSON.parse(event.data)));
 }
 

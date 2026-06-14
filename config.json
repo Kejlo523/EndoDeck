@@ -216,32 +216,6 @@
           }
         },
         {
-          "id": "screenshot",
-          "label": "WYCINEK",
-          "hint": "Win Shift S",
-          "icon": "crop",
-          "tone": "amber",
-          "action": {
-            "type": "hotkey",
-            "keys": [
-              "WIN",
-              "SHIFT",
-              "S"
-            ]
-          }
-        },
-        {
-          "id": "dom-audio",
-          "label": "MIKSER",
-          "hint": "Aplikacje i system",
-          "icon": "sliders",
-          "tone": "accent",
-          "action": {
-            "type": "page",
-            "page": "audio"
-          }
-        },
-        {
           "id": "dom-home",
           "label": "WRÓĆ",
           "hint": "Codzienny",
@@ -402,6 +376,21 @@
             "keys": [
               "CTRL",
               "Y"
+            ]
+          }
+        },
+        {
+          "id": "screenshot",
+          "label": "WYCINEK",
+          "hint": "Win Shift S",
+          "icon": "crop",
+          "tone": "amber",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "WIN",
+              "SHIFT",
+              "S"
             ]
           }
         },
