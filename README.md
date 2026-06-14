@@ -5,20 +5,19 @@ Lokalny Stream Deck z telefonu Huawei P8 Lite, sterowany przez USB i `adb revers
 ## Najważniejsze funkcje
 
 - 12 dużych kafelków z centralnymi ikonami Font Awesome, dopasowanych do ekranu 1280 x 720
-- globalne skróty Discorda działające także wtedy, gdy Discord nie jest aktywnym oknem
+- bezpośrednie wyciszanie sesji audio Discorda bez przełączania aktywnego okna
 - multimedia, programy, skróty Windows, sekwencje akcji i mikser głośności aplikacji
 - Studio PC do edycji kafelków, kolejności, kolorów i akcji, z wyszukiwalnym katalogiem ponad 140 ikon
 - wybór miasta z listy lub bezpośrednio z mapy OpenStreetMap
 - regulowany kolor akcentu, płynne przyciemnienie po ustawionym czasie i wygaszacz z pogodą na siedem dni oraz sekundami przy zegarze
 - pasek stanu z połączeniem USB, prądem baterii i poziomem naładowania
-- lokalne sterowanie urządzeniami Tapo P100 i Tuya bez wysyłania poleceń przez chmurę
+- lokalne sterowanie urządzeniami Tapo P100
 - krótki komunikat o niedostępnym PC, a następnie lokalny wygaszacz z pogodą zapisaną w cache telefonu
 - obniżenie jasności przez natywne API Androida oraz okresowe przesuwanie i zamianę elementów wygaszacza
 - natychmiastowa synchronizacja koloru ze Studio oraz adaptacyjna jasność wygaszacza zależna od wschodu i zachodu słońca
 - godziny wschodu i zachodu dla całego tygodnia oraz autonomiczne odświeżanie pogody przez Wi-Fi po wyłączeniu PC
 - moduły Magisk do uśpienia po odłączeniu, wyłączenia radia, DT2W i usunięcia blokady
 - dwuczęściowa obudowa P8 Lite gotowa do druku 3D
-- kafle Tuya Cloud do sterowania włącznikami Wi-Fi z rzeczywistym stanem urządzeń
 
 ## Urządzenia LAN
 
@@ -28,7 +27,7 @@ Zainstaluj most protokołów jednorazowo:
 python -m pip install -r requirements-local-devices.txt
 ```
 
-Po uruchomieniu EndoDeck otwórz `http://127.0.0.1:8765/devices.html`. Strona pokazuje pięć wykrytych urządzeń w sieci `192.168.11.0/24`. Gniazdka Tapo P100 wymagają danych konta Tapo do lokalnego szyfrowanego połączenia, a przełączniki Tuya wymagają swoich `local_key`. Dane trafiają wyłącznie do ignorowanego przez Git pliku `devices.local.json`.
+Po uruchomieniu EndoDeck otwórz `http://127.0.0.1:8765/devices.html`. Strona pokazuje trzy gniazdka Tapo P100 i pozwala zapisać dane konta potrzebne do lokalnego, szyfrowanego połączenia. Dane trafiają wyłącznie do ignorowanego przez Git pliku `devices.local.json`.
 
 ## Uruchomienie
 
@@ -76,7 +75,7 @@ P8 Lite nie oferuje sprzętowego bypassu, który całkowicie odłącza baterię 
 
 ## Akcje i dźwięk
 
-Obsługiwane typy akcji to `hotkey`, `processHotkey`, `backgroundProcessHotkey`, `microphoneMute`, `media`, `launch`, `command`, `sequence` i `page`. `processHotkey` na chwilę aktywuje wskazany proces, natomiast `backgroundProcessHotkey` wysyła komunikaty klawiatury bezpośrednio do jego okna bez uruchamiania, pokazywania ani przełączania fokusu. `microphoneMute` steruje domyślnym wejściem Windows przez Core Audio, a kafel pokazuje jego rzeczywisty stan nawet po zmianie wykonanej poza EndoDeck.
+Obsługiwane typy akcji to `hotkey`, `processHotkey`, `backgroundProcessHotkey`, `processAudioMute`, `microphoneMute`, `media`, `launch`, `command`, `sequence` i `page`. `processAudioMute` steruje wszystkimi sesjami audio wskazanego procesu na aktywnych wyjściach Windows, bez aktywowania jego okna. `microphoneMute` steruje domyślnym wejściem Windows przez Core Audio.
 
 Pierwsze dotknięcie aktywnego wygaszacza jest przechwytywane wyłącznie jako wybudzenie interfejsu. Kliknięcie nie przechodzi do kafelka znajdującego się pod wygaszaczem.
 
@@ -85,12 +84,6 @@ Kafle programów mogą mieć źródło stanu `process`, dlatego Discord i Spotif
 Mikser używa Windows Core Audio. Pokazuje poziom systemowy oraz aplikacje mające aktywną sesję dźwięku. Aplikacja pojawi się po rozpoczęciu odtwarzania lub wygenerowaniu dźwięku.
 
 Wartość mA pochodzi z czujnika baterii telefonu. Jest najlepszym dostępnym przybliżeniem bilansu energii, ale P8 Lite nie udostępnia osobnego czujnika prądu wejściowego USB.
-
-## Tuya
-
-Skopiuj `tuya.local.json.example` jako `tuya.local.json` i wpisz dane projektu Tuya Cloud oraz urządzenia. Dla Polski używany jest endpoint `https://openapi.tuyaeu.com`. Plik lokalny jest ignorowany przez Git, więc Access Secret i identyfikatory urządzeń nie trafią do repozytorium.
-
-Każde urządzenie otrzymuje krótki alias, na przykład `salon`. W Studio wybierz akcję `Tuya: przełącz urządzenie` i wpisz ten alias. Kafel automatycznie dostanie źródło stanu Tuya i będzie podświetlony tylko wtedy, gdy odpowiedni kod przełącznika, domyślnie `switch_1`, ma wartość `true`.
 
 Telefon zapisuje ostatnią poprawną prognozę w pamięci aplikacji, dlatego pogoda pozostaje dostępna również po utracie połączenia z serwerem. Lokalny wygaszacz może dodatkowo odświeżać Open-Meteo bezpośrednio przez Wi-Fi co 15 minut. Zegar i reguły jasności noc/dzień/wschód/zachód są przeliczane lokalnie i nie wymagają działającego PC. Ustawienia dostępne bezpośrednio na decku są celowo ograniczone do koloru akcentu i czasów bezczynności; pełna edycja kafelków pozostaje w Studio PC.
 

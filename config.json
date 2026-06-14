@@ -52,16 +52,16 @@
         {
           "id": "discord-deafen",
           "label": "WYCISZENIE",
-          "hint": "Discord · skrót globalny",
+          "hint": "Discord · audio procesu",
           "icon": "headset",
           "tone": "red",
           "action": {
-            "type": "globalHotkey",
-            "keys": [
-              "CTRL",
-              "ALT",
-              "END"
-            ]
+            "type": "processAudioMute",
+            "process": "Discord"
+          },
+          "status": {
+            "type": "processAudioMute",
+            "process": "Discord"
           }
         },
         {
@@ -198,24 +198,6 @@
           "tone": "green",
           "action": { "type": "localDeviceToggle", "device": "tapo-142" },
           "status": { "type": "localDevice", "device": "tapo-142" }
-        },
-        {
-          "id": "dom-tuya-147",
-          "label": "DUŻY POKÓJ",
-          "hint": "Tuya · 192.168.11.147",
-          "icon": "wifi",
-          "tone": "blue",
-          "action": { "type": "localDeviceToggle", "device": "tuya-147" },
-          "status": { "type": "localDevice", "device": "tuya-147" }
-        },
-        {
-          "id": "dom-tuya-148",
-          "label": "MAŁY POKÓJ",
-          "hint": "Tuya · 192.168.11.148",
-          "icon": "wifi",
-          "tone": "blue",
-          "action": { "type": "localDeviceToggle", "device": "tuya-148" },
-          "status": { "type": "localDevice", "device": "tuya-148" }
         },
         {
           "id": "screenshot",

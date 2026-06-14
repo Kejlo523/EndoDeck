@@ -22,7 +22,7 @@ function statusLabel(device, status) {
 
 function statusDetail(device, status) {
   if (status?.error) return status.error;
-  if (!device.configured) return device.provider === "tapo" ? "Uzupełnij konto Tapo powyżej" : "Uzupełnij lokalny klucz Tuya";
+  if (!device.configured) return "Uzupełnij konto Tapo powyżej";
   return "Kliknij sprawdzenie połączenia";
 }
 
@@ -35,12 +35,12 @@ function renderDevices(states = {}) {
     card.dataset.alias = device.alias;
     card.innerHTML = `
       <div class="device-head">
-        <div class="device-type"><div class="device-icon">${device.provider === "tapo" ? "P" : "T"}</div><div><strong>${escapeHtml(device.name)}</strong><span>${escapeHtml(device.provider.toUpperCase())} · ${escapeHtml(device.model ?? "WiFi Switch")}</span></div></div>
+        <div class="device-type"><div class="device-icon">P</div><div><strong>${escapeHtml(device.name)}</strong><span>TAPO · ${escapeHtml(device.model ?? "WiFi Switch")}</span></div></div>
         <div class="state-dot" title="${escapeHtml(statusDetail(device, state))}"><i></i><span class="device-state">${statusLabel(device, state)}</span></div>
       </div>
       <div class="device-fields">
         <label>Nazwa kafelka<input data-field="name" value="${escapeHtml(device.name)}"></label>
-        ${device.provider === "tuya" ? '<label>Local key Tuya<input data-field="localKey" type="password" placeholder="Pozostaw puste, aby nie zmieniać"></label>' : '<label>Konfiguracja<input value="Wspólne konto Tapo powyżej" disabled></label>'}
+        <label>Konfiguracja<input value="Wspólne konto Tapo powyżej" disabled></label>
       </div>
       <p class="device-error">${escapeHtml(statusDetail(device, state))}</p>
       <div class="device-meta"><span>${escapeHtml(device.ip)}</span><span>${escapeHtml(device.alias)}</span></div>`;
@@ -64,8 +64,7 @@ async function save() {
     const devices = {};
     for (const card of document.querySelectorAll(".device-card")) {
       devices[card.dataset.alias] = {
-        name: card.querySelector('[data-field="name"]').value,
-        localKey: card.querySelector('[data-field="localKey"]')?.value ?? ""
+        name: card.querySelector('[data-field="name"]').value
       };
     }
     const response = await fetch("/api/local-devices", {

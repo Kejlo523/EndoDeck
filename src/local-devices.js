@@ -9,9 +9,7 @@ const defaults = {
   devices: {
     "tapo-109": { name: "Tapo P100 - 109", provider: "tapo", model: "P100", ip: "192.168.11.109" },
     "tapo-116": { name: "Tapo P100 - 116", provider: "tapo", model: "P100", ip: "192.168.11.116" },
-    "tapo-142": { name: "Tapo P100 - 142", provider: "tapo", model: "P100", ip: "192.168.11.142" },
-    "tuya-147": { name: "Duzy pokoj", provider: "tuya", ip: "192.168.11.147", id: "bf36c2f58621c15751zux9", version: "3.4", dp: "1", localKey: "" },
-    "tuya-148": { name: "Maly pokoj", provider: "tuya", ip: "192.168.11.148", id: "bf1357a27cebe638ecb6ed", version: "3.4", dp: "1", localKey: "" }
+    "tapo-142": { name: "Tapo P100 - 142", provider: "tapo", model: "P100", ip: "192.168.11.142" }
   }
 };
 
@@ -92,14 +90,11 @@ function runBridge(payload, timeout = 12_000) {
 }
 
 function isConfigured(device, settings) {
-  return device.provider === "tapo"
-    ? Boolean(settings.tapo.username && settings.tapo.password)
-    : Boolean(device.localKey);
+  return device.provider === "tapo" && Boolean(settings.tapo.username && settings.tapo.password);
 }
 
 function publicDevice(alias, device, settings) {
-  const { localKey, ...safe } = device;
-  return { alias, ...safe, configured: isConfigured(device, settings) };
+  return { alias, ...device, configured: isConfigured(device, settings) };
 }
 
 export async function getLocalDeviceSetup() {
@@ -118,7 +113,6 @@ export async function saveLocalDeviceSetup(input = {}) {
   for (const [alias, update] of Object.entries(input.devices ?? {})) {
     if (!next.devices[alias] || !update || typeof update !== "object") continue;
     if (typeof update.name === "string" && update.name.trim()) next.devices[alias].name = update.name.trim().slice(0, 48);
-    if (typeof update.localKey === "string" && update.localKey) next.devices[alias].localKey = update.localKey.trim();
   }
   await writeFile(settingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
   cachedSettings = next;
@@ -137,24 +131,21 @@ export async function getLocalDeviceStates(aliases = [], { force = false } = {})
   const settings = await loadSettings();
   const result = {};
   const tapoDevices = [];
-  const otherDevices = [];
   for (const alias of wanted) {
     const device = settings.devices[alias];
     if (!device) continue;
     if (isConfigured(device, settings)) {
       const entry = { alias, ...device };
-      if (device.provider === "tapo") tapoDevices.push(entry);
-      else otherDevices.push(entry);
+      tapoDevices.push(entry);
     }
     else result[alias] = {
       active: false,
       available: false,
       provider: device.provider,
       source: "local-device",
-      error: device.provider === "tapo" ? "Brak danych konta Tapo" : "Brak lokalnego klucza Tuya"
+      error: "Brak danych konta Tapo"
     };
   }
-  if (otherDevices.length) Object.assign(result, await runBridge({ command: "status", settings, devices: otherDevices }));
   if (tapoDevices.length && tapoAuthBlock) {
     for (const device of tapoDevices) result[device.alias] = blockedTapoState();
   } else if (tapoDevices.length) {

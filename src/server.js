@@ -9,7 +9,6 @@ import { getWeather } from "./weather.js";
 import { getControlStates } from "./control-status.js";
 import { getNowPlaying } from "./now-playing.js";
 import { reversePlace, searchPlaces } from "./geocode.js";
-import { getTuyaSetup } from "./tuya.js";
 import { getLocalDeviceSetup, saveLocalDeviceSetup, testLocalDevices } from "./local-devices.js";
 import { getSystemStats } from "./system-stats.js";
 
@@ -117,9 +116,6 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/api/nowplaying") {
       return sendJson(response, 200, await getNowPlaying());
-    }
-    if (request.method === "GET" && url.pathname === "/api/tuya") {
-      return sendJson(response, 200, await getTuyaSetup());
     }
     if (request.method === "GET" && url.pathname === "/api/local-devices") {
       return sendJson(response, 200, await getLocalDeviceSetup());

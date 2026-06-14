@@ -5,7 +5,6 @@ let config;
 let pageName = "home";
 let tileIndex = 0;
 let selectedIcon = "wand-magic-sparkles";
-let tuyaSetup = { configured: false, devices: [] };
 let localDeviceSetup = { devices: [] };
 let map;
 let marker;
@@ -51,7 +50,7 @@ function actionValues(action) {
   if (action.type === "hotkey") return [(action.keys ?? []).join(" + "), ""];
   if (["processHotkey", "backgroundProcessHotkey"].includes(action.type)) return [action.process ?? "", (action.keys ?? []).join(" + ")];
   if (action.type === "processAudioMute") return [action.process ?? "", ""];
-  if (["tuyaToggle", "localDeviceToggle"].includes(action.type)) return [action.device ?? "", ""];
+  if (action.type === "localDeviceToggle") return [action.device ?? "", ""];
   if (action.type === "media") return [action.key ?? "", ""];
   if (action.type === "page") return [action.page ?? "", ""];
   if (action.type === "sequence") return ["", JSON.stringify(action.actions ?? [], null, 2)];
@@ -63,7 +62,7 @@ function updateActionFields() {
   const type = $("#tile-type").value;
   const labels = {
     hotkey: ["Klawisze", "np. CTRL + SHIFT + P", false], processHotkey: ["Proces i skrót", "Discord", true], backgroundProcessHotkey: ["Proces bez przełączania okna", "Discord", true], processAudioMute: ["Proces audio", "Discord", false], launch: ["Program lub URL", "C:\\Program Files\\...", true],
-    command: ["Polecenie", "powershell.exe", true], media: ["Klawisz multimedia", "playPause", false], page: ["Nazwa strony", "home", false], tuyaToggle: ["Alias urządzenia Tuya Cloud", "np. salon", false], localDeviceToggle: ["Urządzenie w sieci lokalnej", "", false],
+    command: ["Polecenie", "powershell.exe", true], media: ["Klawisz multimedia", "playPause", false], page: ["Nazwa strony", "home", false], localDeviceToggle: ["Urządzenie w sieci lokalnej", "", false],
     sequence: ["Sekwencja JSON", "", true], microphoneMute: ["Mikrofon systemowy", "Stan jest odczytywany na żywo z Windows", false]
   };
   const [label, placeholder, detail] = labels[type];
@@ -73,15 +72,6 @@ function updateActionFields() {
   }
   if (type === "sequence") {
     $("#action-fields").innerHTML = `<label>${label}<textarea id="action-detail" rows="5" placeholder="[]"></textarea></label>`;
-    return;
-  }
-  if (type === "tuyaToggle" && tuyaSetup.devices.length) {
-    const options = tuyaSetup.devices.map((device) => `<option value="${device.alias}">${device.name} (${device.alias})</option>`).join("");
-    $("#action-fields").innerHTML = `<label>${label}<select id="action-primary">${options}</select></label>`;
-    return;
-  }
-  if (type === "tuyaToggle") {
-    $("#action-fields").innerHTML = `<label>${label}<input id="action-primary" placeholder="${placeholder}"></label><div class="action-note">Najpierw skonfiguruj urządzenia w lokalnym pliku tuya.local.json. Dane dostępowe nie są zapisywane w konfiguracji decka ani w Git.</div>`;
     return;
   }
   if (type === "localDeviceToggle") {
@@ -111,7 +101,7 @@ function buildAction() {
   if (type === "hotkey") return { type, keys: primary.split(/[+,\s]+/).filter(Boolean).map((key) => key.toUpperCase()) };
   if (["processHotkey", "backgroundProcessHotkey"].includes(type)) return { type, process: primary, keys: detail.split(/[+,\s]+/).filter(Boolean).map((key) => key.toUpperCase()) };
   if (type === "processAudioMute") return { type, process: primary };
-  if (["tuyaToggle", "localDeviceToggle"].includes(type)) return { type, device: primary };
+  if (type === "localDeviceToggle") return { type, device: primary };
   if (type === "media") return { type, key: primary };
   if (type === "page") return { type, page: primary };
   if (type === "sequence") return { type, actions: JSON.parse(detail || "[]") };
@@ -124,9 +114,9 @@ function applyTile(event) {
     const tile = currentTile();
     tile.label = $("#tile-label").value.trim(); tile.hint = $("#tile-hint").value.trim(); tile.icon = selectedIcon; tile.tone = $("#tile-tone").value; tile.action = buildAction();
     if (tile.action.type === "microphoneMute") tile.status = { type: "microphoneMute" };
-    else if (tile.action.type === "tuyaToggle") tile.status = { type: "tuya", device: tile.action.device };
+    else if (tile.action.type === "processAudioMute") tile.status = { type: "processAudioMute", process: tile.action.process };
     else if (tile.action.type === "localDeviceToggle") tile.status = { type: "localDevice", device: tile.action.device };
-    else if (["microphoneMute", "tuya", "localDevice"].includes(tile.status?.type)) delete tile.status;
+    else if (["microphoneMute", "processAudioMute", "localDevice"].includes(tile.status?.type)) delete tile.status;
     renderPreview(); notify("Kafel zaktualizowany w podglądzie");
   } catch (error) { notify(error.message, true); }
 }
@@ -193,9 +183,8 @@ function initMap() {
 }
 
 async function boot() {
-  [config, tuyaSetup, localDeviceSetup] = await Promise.all([
+  [config, localDeviceSetup] = await Promise.all([
     fetch("/api/config").then((response) => response.json()),
-    fetch("/api/tuya").then((response) => response.json()).catch(() => ({ configured: false, devices: [] })),
     fetch("/api/local-devices").then((response) => response.json()).catch(() => ({ devices: [] }))
   ]); loadGlobals(); renderAll(); initMap();
   updateConnection(await fetch("/api/state").then((response) => response.json())); new EventSource("/api/events").addEventListener("message", (event) => updateConnection(JSON.parse(event.data)));

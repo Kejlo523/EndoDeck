@@ -36,5 +36,6 @@ export function toggleMicrophoneMute() {
 
 export async function toggleProcessMute(processName) {
   const result = await run(["-Action", "process-toggle", "-ProcessName", String(processName)]);
-  return result.available ? result : { ...result, message: `${processName} nie ma teraz aktywnej sesji audio` };
+  if (!result.available) throw new Error(`${processName} nie ma teraz aktywnej sesji audio`);
+  return result;
 }

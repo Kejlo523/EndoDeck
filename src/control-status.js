@@ -1,7 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getAudioSnapshot } from "./audio.js";
-import { getTuyaStates } from "./tuya.js";
 import { getLocalDeviceStates } from "./local-devices.js";
 
 const execFileAsync = promisify(execFile);
@@ -14,16 +13,6 @@ function configuredProcesses(config) {
     }
   }
   return names;
-}
-
-function configuredTuyaDevices(config) {
-  const aliases = new Set();
-  for (const page of Object.values(config.pages ?? {})) {
-    for (const button of page.buttons ?? []) {
-      if (button.status?.type === "tuya" && button.status.device) aliases.add(String(button.status.device));
-    }
-  }
-  return [...aliases];
 }
 
 function configuredLocalDevices(config) {
@@ -47,10 +36,9 @@ async function runningProcesses() {
 }
 
 export async function getControlStates(config) {
-  const [processes, audio, tuya, localDevices] = await Promise.all([
+  const [processes, audio, localDevices] = await Promise.all([
     runningProcesses().catch(() => new Set()),
     getAudioSnapshot().catch(() => ({ muted: false, microphoneMuted: false, sessions: [] })),
-    getTuyaStates(configuredTuyaDevices(config)).catch(() => ({})),
     getLocalDeviceStates(configuredLocalDevices(config)).catch(() => ({}))
   ]);
   const wanted = configuredProcesses(config);
@@ -69,7 +57,6 @@ export async function getControlStates(config) {
         const sessions = (audio.sessions ?? []).filter((session) => String(session.process).toLowerCase() === processName);
         controls[button.id] = { active: sessions.length > 0 && sessions.every((session) => session.muted), available: sessions.length > 0, source: "windows-audio" };
       }
-      if (status.type === "tuya") controls[button.id] = tuya[String(status.device)] ?? { active: false, available: false, source: "tuya" };
       if (status.type === "localDevice") controls[button.id] = localDevices[String(status.device)] ?? { active: false, available: false, source: "local-device" };
     }
   }

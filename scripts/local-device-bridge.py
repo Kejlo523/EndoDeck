@@ -2,7 +2,6 @@ import asyncio
 import json
 import sys
 
-import tinytuya
 from tapo import ApiClient
 
 
@@ -40,34 +39,10 @@ async def tapo_status_from_handler(handler):
     return {"active": active, "available": True, "provider": "tapo", "source": "local-device"}
 
 
-def tuya_client(device):
-    local_key = str(device.get("localKey", "")).strip()
-    if not local_key:
-        raise RuntimeError("Brak lokalnego klucza Tuya")
-    client = tinytuya.OutletDevice(device["id"], device["ip"], local_key)
-    client.set_version(float(device.get("version", 3.4)))
-    client.set_socketTimeout(5)
-    client.set_socketRetryLimit(1)
-    return client
-
-
-async def tuya_status(device):
-    response = await asyncio.to_thread(tuya_client(device).status)
-    if not isinstance(response, dict) or response.get("Error") or response.get("Err"):
-        raise RuntimeError(str(response.get("Error") or response.get("Err") or "Brak odpowiedzi Tuya"))
-    dps = response.get("dps", {})
-    dp = str(device.get("dp", "1"))
-    if dp not in dps:
-        raise RuntimeError(f"Urządzenie nie zwróciło DP {dp}")
-    return {"active": bool(dps[dp]), "available": True, "provider": "tuya", "source": "local-device"}
-
-
 async def device_status(settings, device):
     try:
         if device.get("provider") == "tapo":
             return await tapo_status(settings.get("tapo", {}), device)
-        if device.get("provider") == "tuya":
-            return await tuya_status(device)
         raise RuntimeError("Nieobsługiwany typ urządzenia")
     except Exception as error:
         return {
@@ -85,12 +60,6 @@ async def toggle(settings, device):
         current = await tapo_status_from_handler(handler)
         active = not current["active"]
         await (handler.on() if active else handler.off())
-    elif device.get("provider") == "tuya":
-        current = await tuya_status(device)
-        active = not current["active"]
-        response = await asyncio.to_thread(tuya_client(device).set_status, active, int(device.get("dp", 1)))
-        if isinstance(response, dict) and (response.get("Error") or response.get("Err")):
-            raise RuntimeError(str(response.get("Error") or response.get("Err")))
     else:
         raise RuntimeError("Nieobsługiwany typ urządzenia")
     return {"active": active, "available": True, "provider": device["provider"], "source": "local-device"}

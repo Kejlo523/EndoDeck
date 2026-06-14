@@ -27,8 +27,14 @@ namespace EndoDeck {
 
     [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
     public interface IMMDeviceEnumerator {
-        int EnumAudioEndpoints(EDataFlow dataFlow, uint stateMask, out IntPtr devices);
+        int EnumAudioEndpoints(EDataFlow dataFlow, uint stateMask, out IMMDeviceCollection devices);
         int GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice endpoint);
+    }
+
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E")]
+    public interface IMMDeviceCollection {
+        int GetCount(out uint count);
+        int Item(uint index, out IMMDevice device);
     }
 
     [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("D666063F-1587-4E43-81F1-B948E807363F")]
@@ -138,6 +144,20 @@ namespace EndoDeck {
             return device;
         }
 
+        private static List<IMMDevice> ActiveRenderDevices() {
+            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            IMMDeviceCollection collection;
+            Marshal.ThrowExceptionForHR(enumerator.EnumAudioEndpoints(EDataFlow.Render, 1, out collection));
+            uint count;
+            Marshal.ThrowExceptionForHR(collection.GetCount(out count));
+            var devices = new List<IMMDevice>();
+            for (uint i = 0; i < count; i++) {
+                IMMDevice device;
+                if (collection.Item(i, out device) == 0 && device != null) devices.Add(device);
+            }
+            return devices;
+        }
+
         private static IAudioEndpointVolume Endpoint(EDataFlow flow, ERole role) {
             return Activate<IAudioEndpointVolume>(DefaultDevice(flow, role), "5CDF2C82-841E-4546-9722-0CF74078229A");
         }
@@ -157,45 +177,52 @@ namespace EndoDeck {
             endpoint.GetMasterVolumeLevelScalar(out master);
             endpoint.GetMute(out masterMuted);
 
-            var manager = Activate<IAudioSessionManager2>(device, "77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
-            IAudioSessionEnumerator sessionEnum;
-            Marshal.ThrowExceptionForHR(manager.GetSessionEnumerator(out sessionEnum));
-            int count;
-            sessionEnum.GetCount(out count);
             var sessions = new Dictionary<int, AudioSessionInfo>();
 
-            for (int i = 0; i < count; i++) {
-                IAudioSessionControl control;
-                if (sessionEnum.GetSession(i, out control) != 0 || control == null) continue;
-                var control2 = (IAudioSessionControl2)control;
-                var simple = (ISimpleAudioVolume)control;
-                uint pidRaw;
-                float level;
-                bool muted;
-                control2.GetProcessId(out pidRaw);
-                simple.GetMasterVolume(out level);
-                simple.GetMute(out muted);
-                int pid = (int)pidRaw;
-                if (sessions.ContainsKey(pid)) continue;
+            foreach (var renderDevice in ActiveRenderDevices()) {
+                var manager = Activate<IAudioSessionManager2>(renderDevice, "77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+                IAudioSessionEnumerator sessionEnum;
+                if (manager.GetSessionEnumerator(out sessionEnum) != 0 || sessionEnum == null) continue;
+                int count;
+                sessionEnum.GetCount(out count);
+                for (int i = 0; i < count; i++) {
+                    IAudioSessionControl control;
+                    if (sessionEnum.GetSession(i, out control) != 0 || control == null) continue;
+                    var control2 = (IAudioSessionControl2)control;
+                    var simple = (ISimpleAudioVolume)control;
+                    uint pidRaw;
+                    float level;
+                    bool muted;
+                    control2.GetProcessId(out pidRaw);
+                    simple.GetMasterVolume(out level);
+                    simple.GetMute(out muted);
+                    int pid = (int)pidRaw;
+                    AudioSessionInfo existing;
+                    if (sessions.TryGetValue(pid, out existing)) {
+                        existing.muted = existing.muted && muted;
+                        existing.volume = Math.Max(existing.volume, (int)Math.Round(level * 100));
+                        continue;
+                    }
 
-                string processName = pid == 0 ? "System" : "Proces " + pid;
-                string displayName = null;
-                control.GetDisplayName(out displayName);
-                if (pid != 0) {
-                    try {
-                        var process = Process.GetProcessById(pid);
-                        processName = process.ProcessName;
-                        if (String.IsNullOrWhiteSpace(displayName)) displayName = process.MainWindowTitle;
-                    } catch { }
+                    string processName = pid == 0 ? "System" : "Proces " + pid;
+                    string displayName = null;
+                    control.GetDisplayName(out displayName);
+                    if (pid != 0) {
+                        try {
+                            var process = Process.GetProcessById(pid);
+                            processName = process.ProcessName;
+                            if (String.IsNullOrWhiteSpace(displayName)) displayName = process.MainWindowTitle;
+                        } catch { }
+                    }
+                    if (String.IsNullOrWhiteSpace(displayName)) displayName = pid == 0 ? "Dźwięki systemowe" : processName;
+                    sessions[pid] = new AudioSessionInfo {
+                        id = pid,
+                        name = displayName,
+                        process = processName,
+                        volume = (int)Math.Round(level * 100),
+                        muted = muted
+                    };
                 }
-                if (String.IsNullOrWhiteSpace(displayName)) displayName = pid == 0 ? "Dźwięki systemowe" : processName;
-                sessions[pid] = new AudioSessionInfo {
-                    id = pid,
-                    name = displayName,
-                    process = processName,
-                    volume = (int)Math.Round(level * 100),
-                    muted = muted
-                };
             }
 
             var list = new List<AudioSessionInfo>(sessions.Values);
@@ -229,30 +256,32 @@ namespace EndoDeck {
         }
 
         public static ProcessAudioStatus ToggleProcess(string processName) {
-            var manager = Activate<IAudioSessionManager2>(DefaultDevice(), "77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
-            IAudioSessionEnumerator sessionEnum;
-            Marshal.ThrowExceptionForHR(manager.GetSessionEnumerator(out sessionEnum));
-            int count;
-            sessionEnum.GetCount(out count);
             var matches = new List<ISimpleAudioVolume>();
             bool allMuted = true;
 
-            for (int i = 0; i < count; i++) {
-                IAudioSessionControl control;
-                if (sessionEnum.GetSession(i, out control) != 0 || control == null) continue;
-                var control2 = (IAudioSessionControl2)control;
-                uint pid;
-                control2.GetProcessId(out pid);
-                if (pid == 0) continue;
-                try {
-                    var process = Process.GetProcessById((int)pid);
-                    if (!String.Equals(process.ProcessName, processName, StringComparison.OrdinalIgnoreCase)) continue;
-                    var simple = (ISimpleAudioVolume)control;
-                    bool muted;
-                    simple.GetMute(out muted);
-                    allMuted = allMuted && muted;
-                    matches.Add(simple);
-                } catch { }
+            foreach (var renderDevice in ActiveRenderDevices()) {
+                var manager = Activate<IAudioSessionManager2>(renderDevice, "77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+                IAudioSessionEnumerator sessionEnum;
+                if (manager.GetSessionEnumerator(out sessionEnum) != 0 || sessionEnum == null) continue;
+                int count;
+                sessionEnum.GetCount(out count);
+                for (int i = 0; i < count; i++) {
+                    IAudioSessionControl control;
+                    if (sessionEnum.GetSession(i, out control) != 0 || control == null) continue;
+                    var control2 = (IAudioSessionControl2)control;
+                    uint pid;
+                    control2.GetProcessId(out pid);
+                    if (pid == 0) continue;
+                    try {
+                        var process = Process.GetProcessById((int)pid);
+                        if (!String.Equals(process.ProcessName, processName, StringComparison.OrdinalIgnoreCase)) continue;
+                        var simple = (ISimpleAudioVolume)control;
+                        bool muted;
+                        simple.GetMute(out muted);
+                        allMuted = allMuted && muted;
+                        matches.Add(simple);
+                    } catch { }
+                }
             }
 
             if (matches.Count == 0) return new ProcessAudioStatus { available = false, muted = false };
@@ -267,19 +296,21 @@ namespace EndoDeck {
         }
 
         public static void SetSession(int processId, int volume) {
-            var manager = Activate<IAudioSessionManager2>(DefaultDevice(), "77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
-            IAudioSessionEnumerator sessionEnum;
-            manager.GetSessionEnumerator(out sessionEnum);
-            int count;
-            sessionEnum.GetCount(out count);
             float level = Math.Max(0, Math.Min(100, volume)) / 100f;
-            for (int i = 0; i < count; i++) {
-                IAudioSessionControl control;
-                if (sessionEnum.GetSession(i, out control) != 0 || control == null) continue;
-                var control2 = (IAudioSessionControl2)control;
-                uint pid;
-                control2.GetProcessId(out pid);
-                if ((int)pid == processId) ((ISimpleAudioVolume)control).SetMasterVolume(level, Guid.Empty);
+            foreach (var renderDevice in ActiveRenderDevices()) {
+                var manager = Activate<IAudioSessionManager2>(renderDevice, "77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+                IAudioSessionEnumerator sessionEnum;
+                if (manager.GetSessionEnumerator(out sessionEnum) != 0 || sessionEnum == null) continue;
+                int count;
+                sessionEnum.GetCount(out count);
+                for (int i = 0; i < count; i++) {
+                    IAudioSessionControl control;
+                    if (sessionEnum.GetSession(i, out control) != 0 || control == null) continue;
+                    var control2 = (IAudioSessionControl2)control;
+                    uint pid;
+                    control2.GetProcessId(out pid);
+                    if ((int)pid == processId) ((ISimpleAudioVolume)control).SetMasterVolume(level, Guid.Empty);
+                }
             }
         }
     }
