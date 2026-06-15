@@ -114,6 +114,7 @@ function registerIpc() {
   ipcMain.handle("runtime-status", async () => ({ state: runtime.state, health: await fetch(`http://127.0.0.1:${runtime.port}/api/health`).then((response) => response.json()) }));
   ipcMain.handle("device-diagnose", (_, serial) => runtime.adb.diagnose(serial));
   ipcMain.handle("device-pair", (_, serial) => runtime.adb.pair(serial));
+  ipcMain.handle("device-install-apk", (_, serial) => runtime.adb.installApplication(serial));
   ipcMain.handle("device-install", (_, request) => runtime.adb.installProfile(request.serial, request.options));
   ipcMain.handle("device-reboot", (_, serial) => runtime.adb.run(["-s", serial, "reboot"], 10000).then(() => ({ ok: true })));
   ipcMain.handle("open-studio", () => openDeck("/editor.html"));

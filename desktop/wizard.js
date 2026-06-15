@@ -22,6 +22,16 @@ function render(device) {
     `WebView ${device.webView || "niewykryty"} ${device.webViewCompatible ? "✓" : "✕"}`
   ].map((item) => `<li>${item}</li>`).join("");
   $("#profile-state").textContent = device.profile ? `${device.profile.name} · APK ${device.profile.apkVariant}` : "Brak zgodnego profilu";
+  $("#phone-app").classList.toggle("hidden", !device.connected || !device.apkInstallable);
+  const installed = Boolean(device.installedApk);
+  const webViewWarning = device.webViewCompatible ? "" : ` WebView ${device.webView || "niewykryty"} jest starszy niż zalecany 119+; APK można zainstalować, ale interfejs może wymagać aktualizacji WebView.`;
+  $("#apk-state").textContent = installed
+    ? `Zainstalowana wersja ${device.installedApk}.${webViewWarning}`
+    : `Aplikacja nie jest zainstalowana. Zostanie użyty wariant ${device.profile?.apkVariant || "automatyczny"}.${webViewWarning}`;
+  $("#install-apk").textContent = installed ? "ZAINSTALUJ PONOWNIE APK" : "ZAINSTALUJ APK";
+  const blockers = device.errors || [];
+  $("#profile-blocker").textContent = blockers.length ? `Pełny profil Magisk jest jeszcze zablokowany: ${blockers.join(" · ")}` : "";
+  $("#profile-blocker").classList.toggle("hidden", !device.connected || device.supported || !blockers.length);
   $("#options").classList.toggle("hidden", !device.supported);
   $("#dt2w").disabled = !device.profile?.features.doubleTapWake;
   $("#battery").disabled = !device.profile?.features.batteryGuard;
@@ -35,6 +45,22 @@ $("#scan").addEventListener("click", async () => {
   try { render(await api.diagnose()); }
   catch (error) { notify(error.message, true); }
   finally { $("#scan").disabled = false; $("#scan").textContent = "WYKRYJ TELEFON"; }
+});
+
+$("#install-apk").addEventListener("click", async () => {
+  if (!diagnosis?.serial) return;
+  const button = $("#install-apk");
+  button.disabled = true;
+  button.textContent = "INSTALUJĘ APK...";
+  try {
+    render(await api.installApk(diagnosis.serial));
+    notify("APK EndoDeck została zainstalowana i uruchomiona na telefonie.");
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    button.disabled = false;
+    if (diagnosis) button.textContent = diagnosis.installedApk ? "ZAINSTALUJ PONOWNIE APK" : "ZAINSTALUJ APK";
+  }
 });
 
 $("#install").addEventListener("click", async () => {

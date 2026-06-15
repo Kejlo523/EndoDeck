@@ -100,8 +100,10 @@ export class AdbBridge {
     };
     device.magiskCompatible = versionAtLeast(device.magisk, 22, 1);
     device.webViewCompatible = versionAtLeast(device.webView, 119);
+    device.androidCompatible = device.sdk >= 24 && device.sdk <= 30;
     device.profile = await matchDeviceProfile(device);
-    device.supported = device.sdk >= 24 && device.sdk <= 30 && device.root && device.magiskCompatible && device.webViewCompatible && Boolean(device.profile);
+    device.apkInstallable = device.androidCompatible && Boolean(device.profile);
+    device.supported = device.apkInstallable && device.root && device.magiskCompatible && device.webViewCompatible;
     device.errors = [
       ...(device.sdk < 24 || device.sdk > 30 ? ["Wymagany Android 7-11 (API 24-30)"] : []),
       ...(!device.root ? ["Root przez su jest niedostępny"] : []),
@@ -114,10 +116,14 @@ export class AdbBridge {
   async pair(serial) {
     const diagnosis = await this.diagnose(serial);
     if (!diagnosis.supported) throw new Error(diagnosis.errors.join("; ") || "Telefon nie jest zgodny");
+    await this.rememberDevice(diagnosis);
+    return diagnosis;
+  }
+
+  async rememberDevice(diagnosis) {
     const config = await this.getConfig();
     config.device = { ...config.device, serial: diagnosis.serial, profile: diagnosis.profile.id, apkVariant: diagnosis.profile.apkVariant };
     await this.saveConfig(config);
-    return diagnosis;
   }
 
   artifact(name) {
@@ -143,6 +149,17 @@ export class AdbBridge {
       await this.run(["-s", serial, "install", file], 120000);
       await this.shell(serial, `su -c 'if [ -f ${backup} ]; then uid=$(stat -c %u ${data}); tar -xzf ${backup} -C ${data}; chown -R $uid:$uid ${data}/shared_prefs; restorecon -RF ${data}/shared_prefs >/dev/null 2>&1; rm -f ${backup}; fi'`, 30000);
     }
+  }
+
+  async installApplication(serial) {
+    const diagnosis = await this.diagnose(serial);
+    if (!diagnosis.apkInstallable) throw new Error("Telefon nie obsługuje APK EndoDeck");
+    await this.rememberDevice(diagnosis);
+    await this.installApk(serial, diagnosis.profile.apkVariant);
+    await this.configureConnection(serial);
+    const health = await this.diagnose(serial);
+    if (!health.installedApk) throw new Error("Nie udało się potwierdzić instalacji APK");
+    return health;
   }
 
   async installModule(serial, fileName) {

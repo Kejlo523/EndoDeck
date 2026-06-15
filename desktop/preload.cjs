@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("EndoDeckDesktop", {
   status: () => ipcRenderer.invoke("runtime-status"),
   diagnose: (serial) => ipcRenderer.invoke("device-diagnose", serial),
   pair: (serial) => ipcRenderer.invoke("device-pair", serial),
+  installApk: (serial) => ipcRenderer.invoke("device-install-apk", serial),
   install: (request) => ipcRenderer.invoke("device-install", request),
   reboot: (serial) => ipcRenderer.invoke("device-reboot", serial),
   openStudio: () => ipcRenderer.invoke("open-studio"),
