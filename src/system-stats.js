@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
 import { cpus, freemem, totalmem } from "node:os";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import { scriptPath } from "./runtime-paths.js";
 
 const execFileAsync = promisify(execFile);
-const cpuTemperatureScript = fileURLToPath(new URL("../scripts/cpu-temperature.ps1", import.meta.url));
+const cpuTemperatureScript = scriptPath("cpu-temperature.ps1");
 let previousCpu = cpuTimes();
 let cpuTemperatureCache = { at: 0, value: null };
 

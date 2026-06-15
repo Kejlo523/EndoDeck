@@ -489,21 +489,7 @@ switch ($Action) {
     'devices' { @{ devices = [EndoDeck.Audio]::ListOutputDevices() } | ConvertTo-Json -Depth 4 -Compress }
     'set-default' {
         if (-not $DeviceId) { throw 'Nie wybrano urzadzenia audio' }
-        $svv = Join-Path $PSScriptRoot 'SoundVolumeView.exe'
-        if (-not (Test-Path $svv)) {
-            $fetch = Join-Path $PSScriptRoot 'fetch-soundvolumeview.ps1'
-            if (Test-Path $fetch) { & $fetch }
-        }
-        if (Test-Path $svv) {
-            & $svv /SetDefault $DeviceId all | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'Nie udalo sie ustawic zrodla audio' }
-        } else {
-            try {
-                [EndoDeck.Audio]::SetDefaultOutput($DeviceId)
-            } catch {
-                throw 'Brak narzedzia zmiany zrodla audio (SoundVolumeView)'
-            }
-        }
+        [EndoDeck.Audio]::SetDefaultOutput($DeviceId)
         @{ ok = $true } | ConvertTo-Json -Compress
     }
     default { [EndoDeck.Audio]::List() | ConvertTo-Json -Depth 5 -Compress }

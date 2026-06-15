@@ -52,10 +52,11 @@ function renderDevices(states = {}) {
       </div>
       <div class="device-fields">
         <label>Nazwa kafelka<input data-field="name" value="${escapeHtml(device.name)}"></label>
-        <label>Konfiguracja<input value="Wspólne konto Tapo powyżej" disabled></label>
+        <label>Adres IPv4<input data-field="ip" value="${escapeHtml(device.ip)}" inputmode="decimal" placeholder="192.168.1.20"></label>
       </div>
       <p class="device-error">${escapeHtml(statusDetail(device, state))}</p>
-      <div class="device-meta"><span>${escapeHtml(device.ip)}</span><span>${escapeHtml(device.alias)}</span></div>`;
+      <div class="device-meta"><span>${escapeHtml(device.alias)}</span><button type="button" data-remove="${escapeHtml(device.alias)}">USUŃ</button></div>`;
+    card.querySelector("[data-remove]").addEventListener("click", () => { setup.devices = setup.devices.filter((entry) => entry.alias !== device.alias); renderDevices(states); });
     return card;
   }));
 }
@@ -80,7 +81,10 @@ async function save() {
     const devices = {};
     for (const card of document.querySelectorAll(".device-card")) {
       devices[card.dataset.alias] = {
-        name: card.querySelector('[data-field="name"]').value
+        name: card.querySelector('[data-field="name"]').value,
+        ip: card.querySelector('[data-field="ip"]').value,
+        provider: "tapo",
+        model: "P100"
       };
     }
     const response = await fetch("/api/local-devices", {
@@ -115,6 +119,11 @@ async function testDevices() {
 
 $("#save-devices").addEventListener("click", save);
 $("#test-devices").addEventListener("click", testDevices);
+$("#add-device").addEventListener("click", () => {
+  const index = setup.devices.length + 1;
+  setup.devices.push({ alias: `tapo-${Date.now().toString(36)}`, name: `Tapo ${index}`, ip: "", provider: "tapo", model: "P100", configured: Boolean(setup.tapo.hasPassword && setup.tapo.username) });
+  renderDevices();
+});
 
 const passwordInput = $("#tapo-password");
 const passwordToggle = $("#password-toggle");

@@ -1,11 +1,37 @@
 import { execFile, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
 import { toggleMicrophoneMute, toggleProcessMute } from "./audio.js";
 import { toggleLocalDevice } from "./local-devices.js";
+import { scriptPath } from "./runtime-paths.js";
 
 const execFileAsync = promisify(execFile);
-const sendKeysScript = fileURLToPath(new URL("../scripts/send-keys.ps1", import.meta.url));
+const sendKeysScript = scriptPath("send-keys.ps1");
+
+function resolveLaunch(action) {
+  const alias = String(action.command || "").toLowerCase();
+  const local = process.env.LOCALAPPDATA || "";
+  const roaming = process.env.APPDATA || "";
+  const aliases = {
+    discord: [
+      { command: `${local}\\Discord\\Update.exe`, args: ["--processStart", "Discord.exe"] },
+      { command: `${local}\\DiscordCanary\\Update.exe`, args: ["--processStart", "DiscordCanary.exe"] }
+    ],
+    spotify: [
+      { command: `${roaming}\\Spotify\\Spotify.exe`, args: [] },
+      { command: `${local}\\Microsoft\\WindowsApps\\Spotify.exe`, args: [] }
+    ],
+    vscode: [
+      { command: `${local}\\Programs\\Microsoft VS Code\\Code.exe`, args: [] },
+      { command: "code.cmd", args: [] }
+    ]
+  };
+  const candidates = aliases[alias];
+  if (!candidates) return { command: action.command, args: action.args ?? [] };
+  const match = candidates.find((candidate) => !candidate.command.includes("\\") || existsSync(candidate.command));
+  if (!match) throw new Error(`Nie znaleziono aplikacji: ${action.command}`);
+  return { command: match.command, args: [...match.args, ...(action.args ?? [])] };
+}
 
 async function runKeyScript(codes, { holdMs = 50, extended = false } = {}) {
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", sendKeysScript, "-Keys", codes.join(","), "-HoldMs", String(holdMs)];
@@ -120,7 +146,8 @@ export async function executeAction(action, context) {
     case "localDeviceToggle":
       return toggleLocalDevice(action.device);
     case "launch": {
-      const child = spawn(action.command, action.args ?? [], { detached: true, stdio: "ignore", windowsHide: false });
+      const launch = resolveLaunch(action);
+      const child = spawn(launch.command, launch.args, { detached: true, stdio: "ignore", windowsHide: false });
       child.unref();
       return {};
     }

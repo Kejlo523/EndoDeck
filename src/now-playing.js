@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import { scriptPath } from "./runtime-paths.js";
 
 const execFileAsync = promisify(execFile);
-const scriptPath = fileURLToPath(new URL("../scripts/now-playing.ps1", import.meta.url));
+const nowPlayingScript = scriptPath("now-playing.ps1");
 
 const EMPTY = { title: "", artist: "", album: "", status: "Stopped", source: "", playing: false };
 
@@ -26,7 +26,7 @@ function normalize(raw) {
 async function query() {
   const { stdout } = await execFileAsync(
     "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", nowPlayingScript],
     { windowsHide: true, timeout: 6000, maxBuffer: 256 * 1024, encoding: "buffer" }
   );
   const text = Buffer.isBuffer(stdout) ? stdout.toString("utf8") : String(stdout);

@@ -1,0 +1,10 @@
+{
+  "$schema": "../../schemas/device-profile-v1.schema.json",
+  "schema": "device-profile-v1",
+  "id": "generic",
+  "name": "Generic Android 7-11",
+  "match": { "sdkMin": 24, "sdkMax": 30 },
+  "apkVariant": "auto",
+  "modules": ["endodeck-core"],
+  "features": { "batteryGuard": false, "doubleTapWake": false, "lockscreenBypass": true }
+}

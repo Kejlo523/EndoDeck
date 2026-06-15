@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: npm ci
+      - run: npm run prepare:assets
+      - run: npm run check
+      - run: npm test
+      - run: npm run build:native
+      - run: npm run build:android
+      - run: npm run build:magisk
+      - name: Validate Magisk shell scripts
+        shell: bash
+        run: find magisk -type f \( -name '*.sh' -o -path '*/system/bin/endodeckctl' \) -print0 | xargs -0 -n1 sh -n
+
+  package:
+    runs-on: windows-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: npm ci
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-platform-tools.ps1
+      - run: npm run prepare:assets
+      - run: npm run build:native
+      - run: npm run build:android
+      - run: npm run build:magisk
+      - run: npm run release:manifest
+        env:
+          ENDODECK_RELEASE_PRIVATE_KEY: ${{ secrets.RELEASE_ED25519_PRIVATE_KEY }}
+      - run: npm run build:desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm sbom --sbom-format=cyclonedx | Set-Content release/EndoDeck-SBOM.cdx.json -Encoding utf8
+        shell: pwsh
+      - run: npm run release:manifest
+        env:
+          ENDODECK_RELEASE_PRIVATE_KEY: ${{ secrets.RELEASE_ED25519_PRIVATE_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: endodeck-beta
+          path: |
+            release/*
+            dist/*.apk
+            dist/*Magisk.zip
+            dist/release-manifest.*
+            dist/SHA256SUMS

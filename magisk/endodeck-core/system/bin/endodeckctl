@@ -1,0 +1,75 @@
+#!/system/bin/sh
+
+STATE_DIR=/data/adb/endodeck
+OPTIONS="$STATE_DIR/options.conf"
+NIGHT_MARKER=/data/local/tmp/endodeck-night-standby
+DECK_COMPONENT=pl.endozero.endodeck/.MainActivity
+
+[ -f "$OPTIONS" ] && . "$OPTIONS"
+: "${ENABLE_LOCKSCREEN_BYPASS:=0}"
+: "${KEEP_WIFI_FOR_WEATHER:=1}"
+
+wake_screen() {
+    input keyevent 224
+    sleep 1
+    if dumpsys power 2>/dev/null | grep -q 'mWakefulness=Asleep'; then input keyevent 26; fi
+}
+
+case "$1" in
+    wake)
+        rm -f "$NIGHT_MARKER"
+        dumpsys deviceidle unforce >/dev/null 2>&1
+        settings put global stay_on_while_plugged_in 2
+        settings put system screen_off_timeout 1800000
+        settings put global airplane_mode_on 1
+        am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true >/dev/null 2>&1
+        svc data disable >/dev/null 2>&1
+        if [ "$KEEP_WIFI_FOR_WEATHER" = "1" ]; then svc wifi enable; else svc wifi disable; fi
+        wake_screen
+        if [ "$ENABLE_LOCKSCREEN_BYPASS" = "1" ]; then
+            settings put secure lockscreen.disabled 1
+            locksettings set-disabled true >/dev/null 2>&1
+            wm dismiss-keyguard >/dev/null 2>&1
+        fi
+        am start -n "$DECK_COMPONENT" >/dev/null 2>&1
+        ;;
+    sleep-night)
+        touch "$NIGHT_MARKER"
+        settings put global stay_on_while_plugged_in 0
+        settings put system screen_off_timeout 15000
+        settings put global airplane_mode_on 1
+        am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true >/dev/null 2>&1
+        svc data disable >/dev/null 2>&1
+        svc wifi disable >/dev/null 2>&1
+        input keyevent 223
+        sleep 2
+        dumpsys deviceidle force-idle >/dev/null 2>&1
+        ;;
+    sleep)
+        settings put global stay_on_while_plugged_in 0
+        svc data disable >/dev/null 2>&1
+        svc wifi disable >/dev/null 2>&1
+        input keyevent 223
+        sleep 2
+        dumpsys deviceidle force-idle >/dev/null 2>&1
+        ;;
+    restore)
+        rm -f "$NIGHT_MARKER"
+        dumpsys deviceidle unforce >/dev/null 2>&1
+        settings put global airplane_mode_on 0
+        am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false >/dev/null 2>&1
+        svc wifi enable >/dev/null 2>&1
+        settings put secure lockscreen.disabled 0
+        locksettings set-disabled false >/dev/null 2>&1
+        ;;
+    status)
+        usb=$(cat /sys/class/android_usb/android0/state 2>/dev/null)
+        [ -z "$usb" ] && usb=$(getprop sys.usb.state)
+        if [ -f "$NIGHT_MARKER" ]; then night=true; else night=false; fi
+        printf '{"usb":"%s","night":%s,"sdk":%s}\n' "$usb" "$night" "$(getprop ro.build.version.sdk)"
+        ;;
+    *)
+        echo "usage: endodeckctl status|wake|sleep|sleep-night|restore" >&2
+        exit 2
+        ;;
+esac

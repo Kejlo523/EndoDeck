@@ -18,6 +18,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +34,8 @@ public final class MainActivity extends Activity {
     private boolean destroyed;
     private boolean nightStandby;
     private SharedPreferences preferences;
+    private SecureStore secureStore;
+    private String sessionToken = "";
     private final ExecutorService deviceExecutor = Executors.newFixedThreadPool(3);
     private final ConcurrentHashMap<String, TapoClient> tapoClients = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> tapoStates = new ConcurrentHashMap<>();
@@ -96,8 +99,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public void cacheOfflineBundle(String bundleJson) {
             if (bundleJson == null || bundleJson.length() > 200_000) return;
-            String previous = preferences.getString("offline_bundle", "{}");
-            preferences.edit().putString("offline_bundle", bundleJson).apply();
+            String previous = secureStore.get("offline_bundle");
+            try { secureStore.put("offline_bundle", bundleJson); } catch (Exception ignored) { return; }
             if (!bundleJson.equals(previous)) {
                 tapoClients.clear();
                 tapoStates.clear();
@@ -106,7 +109,8 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public String getOfflineBundle() {
-            return preferences.getString("offline_bundle", "{}");
+            String value = secureStore.get("offline_bundle");
+            return value.isEmpty() ? "{}" : value;
         }
 
         @JavascriptInterface
@@ -203,7 +207,8 @@ public final class MainActivity extends Activity {
         }
 
         private org.json.JSONObject readOfflineBundle() throws org.json.JSONException {
-            return new org.json.JSONObject(preferences.getString("offline_bundle", "{}"));
+            String value = secureStore.get("offline_bundle");
+            return new org.json.JSONObject(value.isEmpty() ? "{}" : value);
         }
     }
 
@@ -214,7 +219,7 @@ public final class MainActivity extends Activity {
                 boolean available = false;
                 HttpURLConnection connection = null;
                 try {
-                    connection = (HttpURLConnection) new URL(DECK_URL + "api/state").openConnection();
+                    connection = (HttpURLConnection) new URL(DECK_URL + "api/health").openConnection();
                     connection.setConnectTimeout(650);
                     connection.setReadTimeout(650);
                     connection.setUseCaches(false);
@@ -229,7 +234,7 @@ public final class MainActivity extends Activity {
                     if (destroyed || isFinishing()) return;
                     if (serverAvailable) {
                         if (nightStandby) leaveNightStandby();
-                        if (!deckVisible) webView.loadUrl(DECK_URL);
+                        if (!deckVisible) webView.loadUrl(authenticatedDeckUrl());
                     } else if (!serverAvailable && deckVisible) {
                         deckVisible = false;
                         webView.loadUrl(OFFLINE_URL);
@@ -246,6 +251,18 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         preferences = getSharedPreferences("endodeck", Context.MODE_PRIVATE);
+        secureStore = new SecureStore(this);
+        String providedToken = getIntent().getStringExtra("endodeck_token");
+        if (providedToken != null && !providedToken.isEmpty()) {
+            sessionToken = providedToken;
+            try { secureStore.put("api_token", providedToken); } catch (Exception ignored) { }
+        } else {
+            sessionToken = secureStore.get("api_token");
+        }
+        String legacyBundle = preferences.getString("offline_bundle", "");
+        if (!legacyBundle.isEmpty() && secureStore.get("offline_bundle").isEmpty()) {
+            try { secureStore.put("offline_bundle", legacyBundle); preferences.edit().remove("offline_bundle").apply(); } catch (Exception ignored) { }
+        }
         nightStandby = preferences.getBoolean("night_standby", false);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setStatusBarColor(Color.BLACK);
@@ -295,6 +312,12 @@ public final class MainActivity extends Activity {
         return Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < NIGHT_STANDBY_END_HOUR;
     }
 
+    private String authenticatedDeckUrl() {
+        if (sessionToken == null || sessionToken.isEmpty()) return DECK_URL;
+        try { return DECK_URL + "?token=" + URLEncoder.encode(sessionToken, "UTF-8"); }
+        catch (Exception ignored) { return DECK_URL; }
+    }
+
     private void scheduleNextNightBoundary() {
         handler.removeCallbacks(nightBoundary);
         Calendar next = Calendar.getInstance();
@@ -320,13 +343,13 @@ public final class MainActivity extends Activity {
             webView.pauseTimers();
         }
         setWindowBrightness(0.01f);
-        runRootCommand("touch " + NIGHT_MARKER + "; settings put global stay_on_while_plugged_in 0; settings put system screen_off_timeout 15000; svc wifi disable; input keyevent 223; dumpsys deviceidle force-idle");
+        runRootCommand("/system/bin/endodeckctl sleep-night");
     }
 
     private void leaveNightStandby() {
         nightStandby = false;
         preferences.edit().putBoolean("night_standby", false).apply();
-        runRootCommand("rm -f " + NIGHT_MARKER + "; dumpsys deviceidle unforce; svc wifi enable; input keyevent 224; sleep 1; if dumpsys power | grep -q 'mWakefulness=Asleep'; then input keyevent 26; fi; wm dismiss-keyguard");
+        runRootCommand("/system/bin/endodeckctl wake");
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (webView != null) {
             webView.resumeTimers();

@@ -1,51 +1,47 @@
 import { execFile } from "node:child_process";
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import { nativeDir, scriptPath } from "./runtime-paths.js";
 
 const execFileAsync = promisify(execFile);
-const scriptPath = fileURLToPath(new URL("../scripts/audio-control.ps1", import.meta.url));
+const fallbackScript = scriptPath("audio-control.ps1");
+let helper;
 
-async function run(args) {
-  const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath, ...args], {
-    windowsHide: true,
-    timeout: 10_000,
-    maxBuffer: 1024 * 1024,
-    encoding: "buffer"
-  });
-  const text = Buffer.isBuffer(stdout) ? stdout.toString("utf8") : String(stdout);
-  return JSON.parse(text.replace(/^\uFEFF/, "").trim() || "{}");
+async function findHelper() {
+  if (helper !== undefined) return helper;
+  const candidates = [
+    join(nativeDir, "EndoDeck.WindowsHelper.exe"),
+    join(nativeDir, "EndoDeck.WindowsHelper", "bin", "Release", "net8.0-windows", "win-x64", "publish", "EndoDeck.WindowsHelper.exe")
+  ];
+  for (const candidate of candidates) {
+    try { await access(candidate); helper = candidate; return helper; } catch {}
+  }
+  helper = null;
+  return null;
 }
 
-export function getAudioSnapshot() {
-  return run(["-Action", "list"]);
+async function runHelper(args) {
+  const executable = await findHelper();
+  if (executable) {
+    const { stdout } = await execFileAsync(executable, args, { windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024 });
+    return JSON.parse(String(stdout).replace(/^\uFEFF/, "").trim() || "{}");
+  }
+  const map = { list: "list", status: "status", devices: "devices", master: "master", session: "session", "microphone-toggle": "microphone-toggle", "process-toggle": "process-toggle", "set-default": "set-default" };
+  const command = map[args[0]];
+  const powershellArgs = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", fallbackScript, "-Action", command];
+  if (command === "master") powershellArgs.push("-Volume", args[1]);
+  if (command === "session") powershellArgs.push("-SessionId", args[1], "-Volume", args[2]);
+  if (command === "process-toggle") powershellArgs.push("-ProcessName", args[1]);
+  if (command === "set-default") powershellArgs.push("-DeviceId", args[1]);
+  const { stdout } = await execFileAsync("powershell.exe", powershellArgs, { windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024, encoding: "buffer" });
+  return JSON.parse((Buffer.isBuffer(stdout) ? stdout.toString("utf8") : String(stdout)).replace(/^\uFEFF/, "").trim() || "{}");
 }
 
-export function getOutputDevices() {
-  return run(["-Action", "devices"]);
-}
-
-export function setDefaultOutputDevice(deviceId) {
-  return run(["-Action", "set-default", "-DeviceId", String(deviceId)]);
-}
-
-export function setMasterVolume(volume) {
-  return run(["-Action", "master", "-Volume", String(volume)]);
-}
-
-export function setSessionVolume(sessionId, volume) {
-  return run(["-Action", "session", "-SessionId", String(sessionId), "-Volume", String(volume)]);
-}
-
-export function getAudioStatus() {
-  return run(["-Action", "status"]);
-}
-
-export function toggleMicrophoneMute() {
-  return run(["-Action", "microphone-toggle"]);
-}
-
-export async function toggleProcessMute(processName) {
-  const result = await run(["-Action", "process-toggle", "-ProcessName", String(processName)]);
-  if (!result.available) throw new Error(`${processName} nie ma teraz aktywnej sesji audio`);
-  return result;
-}
+export function getAudioSnapshot() { return runHelper(["list"]); }
+export function getOutputDevices() { return runHelper(["devices"]); }
+export function setDefaultOutputDevice(deviceId) { return runHelper(["set-default", String(deviceId)]); }
+export function setMasterVolume(volume) { return runHelper(["master", String(volume)]); }
+export function setSessionVolume(sessionId, volume) { return runHelper(["session", String(sessionId), String(volume)]); }
+export function toggleMicrophoneMute() { return runHelper(["microphone-toggle"]); }
+export function toggleProcessMute(processName) { return runHelper(["process-toggle", String(processName)]); }

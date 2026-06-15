@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kejlo523/endodeck/schemas/release-manifest-v1.schema.json",
+  "title": "EndoDeck release manifest v1",
+  "type": "object",
+  "required": ["schema", "version", "channel", "publishedAt", "compatibility", "artifacts"],
+  "properties": {
+    "schema": { "const": "release-manifest-v1" },
+    "version": { "type": "string" },
+    "channel": { "enum": ["beta", "stable"] },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "compatibility": { "type": "object" },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "file", "sha256", "size"],
+        "properties": {
+          "id": { "type": "string" },
+          "file": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}

@@ -7,6 +7,8 @@
 .password-toggle:hover{color:var(--ink);border-color:var(--line);background:#111410}
 .password-toggle svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .password-toggle .icon-eye-off{display:none}
+.device-meta button{border:0;background:transparent;color:#aa7470;font:700 9px Consolas,monospace;cursor:pointer}
+#add-device{width:100%;margin-bottom:10px}
 .password-toggle.is-visible .icon-eye{display:none}
 .password-toggle.is-visible .icon-eye-off{display:block}
 .credentials-panel small{min-height:12px;color:#555c53;font:8px Consolas,monospace}

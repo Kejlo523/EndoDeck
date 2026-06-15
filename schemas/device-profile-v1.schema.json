@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kejlo523/endodeck/schemas/device-profile-v1.schema.json",
+  "title": "EndoDeck device profile v1",
+  "type": "object",
+  "required": ["schema", "id", "name", "match", "apkVariant", "modules", "features"],
+  "properties": {
+    "schema": { "const": "device-profile-v1" },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "name": { "type": "string" },
+    "match": {
+      "type": "object",
+      "required": ["sdkMin", "sdkMax"],
+      "properties": {
+        "manufacturer": { "type": "string" },
+        "model": { "type": "string" },
+        "sdkMin": { "type": "integer", "minimum": 24 },
+        "sdkMax": { "type": "integer", "maximum": 30 }
+      }
+    },
+    "apkVariant": { "enum": ["auto", "universal", "legacy-arm32"] },
+    "modules": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "features": { "type": "object" }
+  }
+}

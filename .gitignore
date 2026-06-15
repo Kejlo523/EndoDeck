@@ -3,11 +3,27 @@
 endodeck.log
 endodeck-error.log
 devices.local.json
+config.json
+release.local.json
+.endodeck-release-private.pem
+dist/*.apk
+dist/*.idsig
+dist/*Magisk.zip
+dist/release-manifest.json
+dist/release-manifest.sig
+dist/SHA256SUMS
+dist/EndoDeck-wizard-preview.png
+dist/EndoDeck-phone-physical-test.png
+dist/*.log
 
 # Local Android signing material
 android/*.keystore
 android/*.jks
 android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/generated/
 
 # Editor and OS files
 .idea/
@@ -19,5 +35,11 @@ Thumbs.db
 node_modules/
 scripts/SoundVolumeView.exe
 scripts/nircmd.exe
+vendor/platform-tools/
+vendor/dotnet/
+native/**/bin/
+native/**/obj/
+native/**/AudioCore.generated.cs
+release/
 *.tmp
 *.bak

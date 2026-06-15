@@ -1,10 +1,14 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$adb = Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
+$adb = Join-Path $root 'vendor\platform-tools\adb.exe'
+if (-not (Test-Path $adb)) { & (Join-Path $PSScriptRoot 'fetch-platform-tools.ps1') }
 $packages = @(
-    'EndoDeck-Power-Guard-Magisk.zip',
-    'EndoDeck-Touch-Wake-Magisk.zip'
+    'EndoDeck-Core-Magisk.zip',
+    'EndoDeck-Balanced-Magisk.zip'
 )
+
+$model = (& $adb shell getprop ro.product.model).Trim()
+if ($model -eq 'ALE-L21') { $packages += 'EndoDeck-OEM-Huawei-ALE-L21-Magisk.zip' }
 
 & (Join-Path $PSScriptRoot 'build-magisk.ps1') | Out-Null
 

@@ -1,8 +1,5 @@
 import os from "node:os";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-
-const settingsPath = fileURLToPath(new URL("../devices.local.json", import.meta.url));
+import { getOfflineDeviceSettings } from "./local-devices.js";
 
 export function getLanHost() {
   const preferred = [];
@@ -19,18 +16,7 @@ export function getLanHost() {
 }
 
 async function loadDeviceSettings() {
-  try {
-    const raw = JSON.parse(await readFile(settingsPath, "utf8"));
-    return {
-      tapo: {
-        username: String(raw.tapo?.username ?? "").trim(),
-        password: String(raw.tapo?.password ?? "")
-      },
-      devices: raw.devices ?? {}
-    };
-  } catch {
-    return { tapo: { username: "", password: "" }, devices: {} };
-  }
+  return getOfflineDeviceSettings().catch(() => ({ tapo: { username: "", password: "" }, devices: {} }));
 }
 
 function collectSwitchButtons(config) {

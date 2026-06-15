@@ -1,0 +1,69 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "pl.endozero.endodeck"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "pl.endozero.endodeck"
+        minSdk 24
+        targetSdk 30
+        versionCode 11001
+        versionName "1.1.0-beta.1"
+    }
+
+    flavorDimensions += "runtime"
+    productFlavors {
+        universal {
+            dimension "runtime"
+            manifestPlaceholders = [use32bitAbi: "false"]
+        }
+        legacyArm32 {
+            dimension "runtime"
+            manifestPlaceholders = [use32bitAbi: "true"]
+        }
+    }
+
+    signingConfigs {
+        release {
+            def store = System.getenv("ENDODECK_ANDROID_KEYSTORE")
+            if (store) {
+                storeFile file(store)
+                storePassword System.getenv("ENDODECK_ANDROID_STORE_PASSWORD")
+                keyAlias System.getenv("ENDODECK_ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ENDODECK_ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv("ENDODECK_ANDROID_KEYSTORE") ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    lint {
+        disable "ExpiredTargetSdkVersion"
+        abortOnError true
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile "../AndroidManifest.xml"
+            java.srcDirs = ["../src"]
+            assets.srcDirs = ["../assets"]
+        }
+        legacyArm32 {
+            jniLibs.srcDirs = ["../generated/legacy-jni"]
+        }
+    }
+
+    packaging {
+        jniLibs {
+            keepDebugSymbols += "**/libendodeckabi.so"
+        }
+    }
+}

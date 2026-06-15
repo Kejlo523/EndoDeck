@@ -1,0 +1,10 @@
+{
+  "$schema": "../../schemas/device-profile-v1.schema.json",
+  "schema": "device-profile-v1",
+  "id": "huawei-ale-l21",
+  "name": "Huawei P8 Lite ALE-L21",
+  "match": { "manufacturer": "HUAWEI", "model": "ALE-L21", "sdkMin": 24, "sdkMax": 30 },
+  "apkVariant": "legacy-arm32",
+  "modules": ["endodeck-core", "endodeck-balanced", "endodeck-oem-huawei-ale-l21"],
+  "features": { "batteryGuard": true, "doubleTapWake": true, "lockscreenBypass": true }
+}
