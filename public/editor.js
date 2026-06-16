@@ -23,6 +23,49 @@ function notify(message, error = false) {
 function currentPage() { return config.pages[pageName]; }
 function currentTile() { return currentPage().buttons[tileIndex]; }
 
+async function fetchJson(url, options) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; }
+  catch { throw new Error(`Nieprawidłowa odpowiedź JSON z ${url}`); }
+  if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
+  return data;
+}
+
+function assertConfigShape(nextConfig) {
+  if (!nextConfig?.pages || !Object.keys(nextConfig.pages).length) throw new Error("Konfiguracja decka nie zawiera stron");
+  for (const [name, page] of Object.entries(nextConfig.pages)) {
+    if (!Array.isArray(page.buttons)) throw new Error(`Strona ${name} nie zawiera listy kafelków`);
+  }
+  return nextConfig;
+}
+
+function friendlyError(error) {
+  return error.message === "Brak ważnej sesji EndoDeck"
+    ? "Brak sesji EndoDeck. Otwórz Studio z ikonki EndoDeck w trayu albo z Setupu."
+    : error.message;
+}
+
+function showBootError(error) {
+  const message = friendlyError(error);
+  notify(message, true);
+  $("#page-tabs").replaceChildren();
+  $("#selected-id").textContent = "BŁĄD";
+  const preview = $("#deck-preview");
+  preview.classList.remove("mixer-preview");
+  const card = document.createElement("section");
+  card.className = "editor-error-card";
+  const title = document.createElement("strong");
+  title.textContent = "Nie udało się załadować edytora";
+  const copy = document.createElement("p");
+  copy.textContent = message;
+  const hint = document.createElement("small");
+  hint.textContent = "Jeśli otwierasz adres ręcznie, zamknij tę kartę i użyj opcji Otwórz Studio z traya EndoDeck.";
+  card.replaceChildren(title, copy, hint);
+  preview.replaceChildren(card);
+}
+
 function renderTabs() {
   $("#page-tabs").replaceChildren(...Object.entries(config.pages).map(([name, page]) => {
     const button = document.createElement("button"); button.type = "button"; button.textContent = page.label; button.classList.toggle("active", name === pageName);
@@ -175,8 +218,8 @@ function readGlobals() {
 async function save() {
   try {
     applyTile(); readGlobals();
-    const response = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
-    const result = await response.json(); if (!response.ok) throw new Error(result.error || "Nie udało się zapisać"); config = result.config; notify("Konfiguracja zapisana na EndoDeck");
+    const result = await fetchJson("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+    config = assertConfigShape(result.config); notify("Konfiguracja zapisana na EndoDeck");
   } catch (error) { notify(error.message, true); }
 }
 
@@ -197,14 +240,14 @@ function setPlace(place, moveMap = true) {
 }
 
 async function reverseMap(lat, lon) {
-  try { setPlace(await fetch(`/api/geocode/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`).then((response) => { if (!response.ok) throw new Error("Nie udało się odczytać lokalizacji"); return response.json(); }), false); }
+  try { setPlace(await fetchJson(`/api/geocode/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`), false); }
   catch (error) { notify(error.message, true); }
 }
 
 async function searchPlaces(event) {
   event.preventDefault(); const query = $("#place-query").value.trim(); if (query.length < 2) return;
   try {
-    const results = await fetch(`/api/geocode/search?q=${encodeURIComponent(query)}`).then((response) => response.json());
+    const results = await fetchJson(`/api/geocode/search?q=${encodeURIComponent(query)}`);
     $("#place-results").replaceChildren(...results.map((place) => { const button = document.createElement("button"); button.type = "button"; button.innerHTML = `<strong>${place.city}</strong><span>${place.label}</span>`; button.addEventListener("click", () => { setPlace(place); $("#place-results").replaceChildren(); }); return button; }));
     if (!results.length) $("#place-results").innerHTML = '<div class="place-empty">Nie znaleziono miasta</div>';
   } catch (error) { notify(error.message, true); }
@@ -219,14 +262,14 @@ function initMap() {
 
 async function boot() {
   [config, localDeviceSetup] = await Promise.all([
-    fetch("/api/config").then((response) => response.json()),
-    fetch("/api/local-devices").then((response) => response.json()).catch(() => ({ devices: [] }))
+    fetchJson("/api/config").then(assertConfigShape),
+    fetchJson("/api/local-devices").catch(() => ({ devices: [] }))
   ]);
   $("#icon-search").placeholder = `Szukaj w ${iconNames.length} ikonach`; loadGlobals(); renderAll(); initMap();
-  updateConnection(await fetch("/api/state").then((response) => response.json())); new EventSource("/api/events").addEventListener("message", (event) => updateConnection(JSON.parse(event.data)));
+  updateConnection(await fetchJson("/api/state")); new EventSource("/api/events").addEventListener("message", (event) => updateConnection(JSON.parse(event.data)));
 }
 
 $("#tile-form").addEventListener("submit", applyTile); $("#tile-type").addEventListener("change", updateActionFields); $("#icon-search").addEventListener("input", () => renderIconPicker($("#icon-picker"), $("#icon-search").value, selectedIcon, chooseIcon));
 $("#move-left").addEventListener("click", () => move(-1)); $("#move-right").addEventListener("click", () => move(1)); $("#save-config").addEventListener("click", save); $("#place-search").addEventListener("submit", searchPlaces);
 $("#global-accent").addEventListener("input", (event) => { $("#accent-value").textContent = event.target.value; document.documentElement.style.setProperty("--accent", event.target.value); });
-boot().catch((error) => notify(error.message, true));
+boot().catch(showBootError);
