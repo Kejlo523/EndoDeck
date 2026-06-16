@@ -68,12 +68,17 @@ module usb_opening(extra_depth = 0) {
         cube([10.5 + extra_depth, 17, 8.4]);
 }
 
-module button_openings() {
-    // Slim side reliefs keep power/volume reachable without exposing the phone body.
-    translate([-48, outer_height / 2 - 4, front_skin + 1.0])
-        cube([46, 8, 7.2]);
-    translate([32, -outer_height / 2 - 4, front_skin + 1.0])
-        cube([42, 8, 7.2]);
+module hidden_power_access() {
+    // A narrow service tunnel reaches the landscape-bottom power key.
+    // It stays off the visible front face and is meant for a thin stylus/screwdriver.
+    translate([53, -outer_height / 2 - 0.2, front_skin + 5.2])
+        rotate([90, 0, 0])
+            cylinder(h = 12, d = 3.2, center = true);
+
+    // Tiny lead-in on the lower edge makes the access easier to find by touch.
+    translate([53, -outer_height / 2 - 5.7, front_skin + 5.2])
+        rotate([90, 0, 0])
+            cylinder(h = 1.4, d1 = 5.2, d2 = 3.2, center = true);
 }
 
 module front_bezel() {
@@ -96,7 +101,7 @@ module front_bezel() {
 
         screen_aperture();
         usb_opening();
-        button_openings();
+        hidden_power_access();
 
         screw_positions()
             translate([0, 0, shell_depth - 6.8])

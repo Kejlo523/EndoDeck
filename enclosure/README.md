@@ -40,4 +40,6 @@ Przednią część drukuj płaską stroną ekranu na stole. Tylną część druk
 4. Załóż pokrywę i skręć czterema śrubami M3 × 10 mm. Dokręcaj tylko do usunięcia luzu.
 5. Wklej gumowe stopki w zagłębienia nóg.
 
+W wariancie Samsung A6 front pozostaje czysty. Przycisk zasilania ma tylko wąski kanał serwisowy od dolnej krawędzi, przygotowany pod cienki patyczek lub mały śrubokręt.
+
 Otwór na ekran ma `112,4 × 63,6 mm` dla Huaweia oraz `128,2 × 62,4 mm` dla Samsunga. Przed pełnym drukiem warto wydrukować pierwsze 3–4 mm przedniej części i przyłożyć je do telefonu, ponieważ zamienniki ekranów mogą mieć minimalnie inne położenie aktywnego obszaru.
