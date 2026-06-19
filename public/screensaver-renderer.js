@@ -59,7 +59,7 @@ function formatClock(now) {
 }
 
 function analogAngles(now) {
-  const seconds = now.getSeconds();
+  const seconds = now.getSeconds() + now.getMilliseconds() / 1000;
   const minutes = now.getMinutes() + seconds / 60;
   const hours = (now.getHours() % 12) + minutes / 60;
   return {
@@ -369,10 +369,10 @@ function elementHtml(entry, context, config, profile) {
       if (widgets.telemetry === false) return "";
       return renderMetric(entry.type, context);
     case "nowPlaying":
-      if (widgets.nowPlaying === false || display.showNowPlaying === false) return "";
+      if (widgets.nowPlaying === false || display.showNowPlaying === false || !nowPlaying?.playing || !nowPlaying?.title) return "";
       return `<div class="screen-now-playing"><span class="eq saver-eq screen-now-eq ${nowPlaying?.playing ? "playing" : ""}" aria-hidden="true">${eqBars()}</span><span class="screen-now-copy"><b>TERAZ GRA</b><strong>${escapeHtml(nowPlaying?.title || "Nic nie gra")}</strong><span>${escapeHtml(nowPlaying?.artist || "Odtwarzacz jest w gotowości")}</span></span></div>`;
     case "visualizer":
-      if (widgets.visualizer === false || display.visualizer?.enabled === false || display.showEqualizer === false) return "";
+      if (widgets.visualizer === false || display.visualizer?.enabled === false || display.showEqualizer === false || !nowPlaying?.playing || !nowPlaying?.title) return "";
       return `<span class="eq saver-eq screen-visualizer ${nowPlaying?.playing ? "playing" : ""}" aria-hidden="true">${eqBars()}</span>`;
     case "image":
       return entry.data?.src ? `<img class="screen-image" src="${escapeHtml(entry.data.src)}" alt="${escapeHtml(entry.label)}">` : `<div class="screen-image-placeholder">OBRAZ</div>`;
@@ -424,22 +424,26 @@ export function updateScreensaverDynamic(root, context = {}) {
   for (const node of root.querySelectorAll(".screen-element-clock .screen-clock")) {
     const main = node.querySelector("span");
     const seconds = node.querySelector("small");
-    if (main) main.textContent = clock.main;
-    if (seconds) seconds.textContent = clock.seconds;
+    if (main && main.textContent !== clock.main) main.textContent = clock.main;
+    if (seconds && seconds.textContent !== clock.seconds) seconds.textContent = clock.seconds;
   }
-  for (const node of root.querySelectorAll(".screen-element-date .screen-date")) node.textContent = formatDate(now);
+  const date = formatDate(now);
+  for (const node of root.querySelectorAll(".screen-element-date .screen-date")) {
+    if (node.textContent !== date) node.textContent = date;
+  }
   const angles = analogAngles(now);
   for (const node of root.querySelectorAll(".screen-analog-clock")) {
+    const syncSecond = context.syncAnalogSecond === true || !node.style.getPropertyValue("--second-angle");
     node.style.setProperty("--hour-angle", `${angles.hour}deg`);
     node.style.setProperty("--minute-angle", `${angles.minute}deg`);
-    node.style.setProperty("--second-angle", `${angles.second}deg`);
+    if (syncSecond) node.style.setProperty("--second-angle", `${angles.second}deg`);
   }
 
   if (!Object.prototype.hasOwnProperty.call(context, "state")) return;
   const state = context.state ?? {};
   const battery = state.battery;
   const nowPlaying = state.nowPlaying ?? {};
-  const playing = Boolean(nowPlaying.playing);
+  const playing = Boolean(nowPlaying.playing && nowPlaying.title);
 
   for (const node of root.querySelectorAll(".screen-element-pcStatus .screen-chip")) {
     node.classList.toggle("is-online", Boolean(state.adb));
@@ -453,6 +457,9 @@ export function updateScreensaverDynamic(root, context = {}) {
   }
   for (const node of root.querySelectorAll(".screen-now-eq, .screen-visualizer")) {
     node.classList.toggle("playing", playing);
+  }
+  for (const node of root.querySelectorAll(".screen-element-nowPlaying, .screen-element-visualizer")) {
+    node.classList.toggle("screen-media-hidden", !playing);
   }
   for (const node of root.querySelectorAll(".screen-now-copy strong")) {
     setText(node, nowPlaying.title || "Nic nie gra");

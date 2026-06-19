@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="moon" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#eef4ff"/>
+      <stop offset=".52" stop-color="#aebbd4"/>
+      <stop offset="1" stop-color="#536078"/>
+    </radialGradient>
+    <radialGradient id="sky" cx="70%" cy="24%" r="48%">
+      <stop offset="0" stop-color="#25314d"/>
+      <stop offset=".5" stop-color="#080d17"/>
+      <stop offset="1" stop-color="#020408"/>
+    </radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="24"/></filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <g opacity=".72">
+    <circle cx="1220" cy="230" r="128" fill="url(#moon)"/>
+    <circle cx="1268" cy="222" r="128" fill="#020408"/>
+    <circle cx="1185" cy="190" r="12" fill="#dfe8ff" opacity=".22"/>
+    <circle cx="1154" cy="258" r="8" fill="#dfe8ff" opacity=".18"/>
+    <circle cx="1210" cy="306" r="10" fill="#dfe8ff" opacity=".14"/>
+  </g>
+  <g filter="url(#blur)" opacity=".22">
+    <path d="M-80 710 C 300 620, 630 710, 900 650 C 1160 594, 1360 540, 1690 660 L1690 930 L-80 930 Z" fill="#394565"/>
+    <path d="M-60 770 C 280 720, 620 780, 930 728 C 1190 684, 1358 682, 1660 744 L1660 930 L-60 930 Z" fill="#111a28"/>
+  </g>
+  <g opacity=".16" fill="#eef4ff">
+    <circle cx="180" cy="132" r="1.6"/><circle cx="330" cy="270" r="1.2"/><circle cx="540" cy="118" r="1.4"/>
+    <circle cx="880" cy="170" r="1.2"/><circle cx="1010" cy="360" r="1.5"/><circle cx="1460" cy="120" r="1.3"/>
+  </g>
+</svg>

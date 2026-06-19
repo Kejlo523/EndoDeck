@@ -1,5 +1,6 @@
 import os from "node:os";
 import { getOfflineDeviceSettings } from "./local-devices.js";
+import { readScreensaverAsset } from "./screensaver-assets.js";
 
 export function getLanHost() {
   const preferred = [];
@@ -36,6 +37,44 @@ function collectSwitchButtons(config) {
     }
   }
   return switches;
+}
+
+function collectScreensaverAssetIds(config) {
+  const ids = new Set();
+  const visit = (value) => {
+    if (!value) return;
+    if (typeof value === "string") {
+      const match = value.match(/^\/api\/assets\/screensavers\/([^?#]+)/);
+      if (match) ids.add(decodeURIComponent(match[1]));
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry);
+      return;
+    }
+    if (typeof value === "object") {
+      for (const entry of Object.values(value)) visit(entry);
+    }
+  };
+  visit(config.ui?.screensavers ?? []);
+  return [...ids];
+}
+
+async function collectScreensaverAssets(config) {
+  const assets = {};
+  let totalBytes = 0;
+  for (const id of collectScreensaverAssetIds(config)) {
+    try {
+      const asset = await readScreensaverAsset(id);
+      totalBytes += asset.data.length;
+      if (totalBytes > 4 * 1024 * 1024) break;
+      assets[id] = {
+        mime: asset.mime,
+        dataUrl: `data:${asset.mime};base64,${asset.data.toString("base64")}`
+      };
+    } catch {}
+  }
+  return assets;
 }
 
 export async function buildOfflineBundle(config) {
@@ -75,6 +114,7 @@ export async function buildOfflineBundle(config) {
       screensaverBrightness: config.ui?.screensaverBrightness ?? null,
       nightStandby: config.ui?.nightStandby ?? null
     },
+    assets: await collectScreensaverAssets(config),
     switches,
     tapo: configured ? { username: settings.tapo.username, password: settings.tapo.password } : null,
     devices

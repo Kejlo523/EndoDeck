@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#060806">
+  <link rel="stylesheet" href="screensaver.css">
   <style>
     :root{color-scheme:dark;font-family:Bahnschrift,"Arial Narrow",sans-serif;background:#060806;--accent:#b7f34a;--ink:#f2f5ed;--line:rgba(255,255,255,.07);--muted:#70776d}
     *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden}
@@ -21,7 +22,7 @@
     .shell .dot{width:7px;height:7px;border-radius:50%;background:#ffb84d;box-shadow:0 0 12px #ffb84d}
 
     .saver{--burn-x:0px;--burn-y:0px;z-index:1;color:var(--ink);background:#060806;opacity:0;visibility:hidden;overflow:hidden;transition:opacity 1.2s ease,visibility 0s linear 1.2s}
-    .saver.visible{opacity:1;visibility:visible;transition:opacity 1.2s ease,visibility 0s linear 0s}
+    .saver.visible{z-index:5;opacity:1;visibility:visible;transition:opacity 1.2s ease,visibility 0s linear 0s}
     .saver::before{content:"";position:absolute;inset:0;opacity:.18;background-image:radial-gradient(color-mix(in srgb,var(--accent) 48%,transparent) 1px,transparent 1px);background-size:34px 34px}
     .ambient-orbit{position:absolute;border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);border-radius:50%}
     .orbit-a{width:380px;height:380px;right:-120px;top:-160px}
@@ -116,7 +117,7 @@
     </section>
   </section>
 
-  <section class="saver" id="saver">
+  <section class="screensaver saver" id="saver">
     <div class="ambient-orbit orbit-a"></div>
     <div class="ambient-orbit orbit-b"></div>
     <header class="saver-status">
@@ -138,7 +139,10 @@
     <footer>DOTKNIJ, ABY PONOWNIE POKAZAĆ STATUS POŁĄCZENIA</footer>
   </section>
 
-  <script>
+  <script type="module">
+    import { ensureScreensaverConfig } from "./screensaver-presets.js";
+    import { activeScreensaver, calculateScreensaverBrightness, renderScreensaver, updateScreensaverDynamic, updateScreensaverProtection } from "./screensaver-renderer.js";
+
     const notice = document.querySelector("#notice");
     const saver = document.querySelector("#saver");
     const offlinePanel = document.querySelector("#offline-panel");
@@ -153,6 +157,12 @@
     const switchTimers = new Map();
 
     const toneMap = { accent:"#b7f34a", green:"#62e49b", red:"#ff6663", blue:"#58b9ff", amber:"#ffc15c", violet:"#9f8dff", neutral:"#a7ada4" };
+    const defaultWeather = {
+      city: "OFFLINE",
+      utcOffsetSeconds: 0,
+      current: { code: 2, temperature: "--", apparent: "--", wind: "--" },
+      daily: []
+    };
 
     const labels = {
       0:["SŁONECZNIE","☀"],1:["PRAWIE BEZCHMURNIE","◒"],2:["CZĘŚCIOWE ZACHMURZENIE","◑"],3:["POCHMURNO","☁"],
@@ -164,6 +174,63 @@
     const info = (code) => labels[code] || ["ZMIENNA POGODA","·"];
     const nativeBrightness = (value) => { try { window.NativeDeck?.setBrightness(value); } catch {} };
     const shortTime = (value) => (String(value || "").split("T")[1] || "--:--").slice(0, 5);
+
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function assetUrl(value) {
+      const url = String(value || "");
+      if (url.startsWith("/assets/")) return `file:///android_asset${url}`;
+      const match = url.match(/^\/api\/assets\/screensavers\/([^?#]+)/);
+      if (match) return offlineBundle?.assets?.[decodeURIComponent(match[1])]?.dataUrl || url;
+      return url;
+    }
+
+    function rewriteScreensaverAssets(config) {
+      const next = clone(config);
+      for (const profile of next.ui?.screensavers || []) {
+        if (profile.background?.value) profile.background.value = assetUrl(profile.background.value);
+        for (const element of profile.elements || []) {
+          if (element.data?.src) element.data.src = assetUrl(element.data.src);
+        }
+      }
+      return next;
+    }
+
+    function offlineConfig() {
+      const accent = window.NativeDeck?.getCachedAccent?.() || "#b7f34a";
+      const config = {
+        accent,
+        title: "EndoDeck",
+        ui: clone(offlineBundle?.ui || {})
+      };
+      ensureScreensaverConfig(config);
+      return rewriteScreensaverAssets(config);
+    }
+
+    function screensaverContext(config) {
+      return {
+        config,
+        accent: config.accent,
+        offline: true,
+        weather: cachedWeather || defaultWeather,
+        now: new Date(),
+        state: {
+          adb: false,
+          battery: null,
+          systemStats: {},
+          nowPlaying: { playing: false, title: "", artist: "" }
+        }
+      };
+    }
+
+    function renderOfflineScreensaver() {
+      const config = offlineConfig();
+      document.documentElement.style.setProperty("--accent", config.accent);
+      renderScreensaver(saver, activeScreensaver(config), screensaverContext(config));
+      updateScreensaverDynamic(saver, screensaverContext(config));
+    }
 
     function cityTime(weather) {
       const shifted = new Date(Date.now() + Number(weather?.utcOffsetSeconds || 0) * 1000);
@@ -181,30 +248,17 @@
     }
 
     function saverBrightness(weather) {
-      const settings = offlineBundle?.ui?.screensaverBrightness || {};
-      const NIGHT = brightnessPercent(settings.offlineNight ?? settings.night, 5);
-      const TWILIGHT = brightnessPercent(settings.twilight, 9);
-      const DAY = brightnessPercent(settings.offlineDay ?? settings.day, 10);
-      const local = cityTime(weather);
-      const today = weather?.daily?.find((day) => day.date === local.date) ?? weather?.daily?.[0];
-      const sunrise = eventMinute(today?.sunrise);
-      const sunset = eventMinute(today?.sunset);
-      if (sunrise === null || sunset === null) {
-        const hour = new Date().getHours();
-        return hour >= 7 && hour < 21 ? DAY : NIGHT;
-      }
-      if (Math.abs(local.minute - sunrise) <= 45 || Math.abs(local.minute - sunset) <= 45) return TWILIGHT;
-      return local.minute > sunrise && local.minute < sunset ? DAY : NIGHT;
+      const config = offlineConfig();
+      return calculateScreensaverBrightness(config, weather || defaultWeather, true, new Date(), activeScreensaver(config));
     }
 
     function updateClock() {
-      const now = new Date();
-      document.querySelector("#saver-main-time").textContent = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(now);
-      document.querySelector("#saver-seconds").textContent = String(now.getSeconds()).padStart(2, "0");
-      document.querySelector("#saver-date").textContent = new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long" }).format(now);
+      updateScreensaverDynamic(saver, screensaverContext(offlineConfig()));
     }
 
     function renderWeather(weather) {
+      renderOfflineScreensaver();
+      if (!document.querySelector("#weather-symbol")) return;
       const current = info(weather.current.code);
       document.querySelector("#weather-symbol").textContent = current[1];
       document.querySelector("#weather-temp").textContent = `${weather.current.temperature}°`;
@@ -270,6 +324,7 @@
       } catch {
         offlineBundle = null;
       }
+      renderOfflineScreensaver();
       renderOfflineSwitches();
     }
 
@@ -376,6 +431,7 @@
     }
 
     function rotateScreensaver() {
+      updateScreensaverProtection(saver, activeScreensaver(offlineConfig()));
       const phase = Math.floor(Date.now() / 300_000);
       const positions = [[-5, -3], [4, -4], [-3, 4], [5, 3], [0, -5], [-4, 2], [3, 5], [0, 0]];
       const [x, y] = positions[phase % positions.length];
@@ -388,6 +444,7 @@
     }
 
     function showSaver() {
+      renderOfflineScreensaver();
       notice.classList.add("hidden");
       saver.classList.add("visible");
       rotateScreensaver();

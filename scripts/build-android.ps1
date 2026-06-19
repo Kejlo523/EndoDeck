@@ -20,6 +20,8 @@ if (-not $env:ANDROID_HOME) {
 
 & $gradle -p $android clean
 if ($LASTEXITCODE -ne 0) { throw 'Gradle clean failed.' }
+node (Join-Path $PSScriptRoot 'prepare-android-assets.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Android offline asset preparation failed.' }
 node (Join-Path $PSScriptRoot 'generate-legacy-abi.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Legacy ARM32 ABI anchor generation failed.' }
 & $gradle -p $android assembleUniversalRelease assembleLegacyArm32Release

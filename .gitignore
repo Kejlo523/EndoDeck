@@ -25,6 +25,10 @@ android/app/build/
 android/.gradle/
 android/local.properties
 android/generated/
+android/assets/screensaver-presets.js
+android/assets/screensaver-renderer.js
+android/assets/screensaver.css
+android/assets/assets/
 
 # Editor and OS files
 .idea/

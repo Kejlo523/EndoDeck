@@ -27,6 +27,7 @@ let inactivityTimer;
 let screensaverTimer;
 let burnInTimer;
 let screensaverActive = false;
+let screensaverMediaVisible = false;
 let latestWeather;
 let suppressDeckClickUntil = 0;
 let lastShownError = null;
@@ -260,8 +261,8 @@ settingsForm.addEventListener("submit", async (event) => {
     config.accent = fields.accent.value;
     const display = {
       ...getDisplayConfig(config),
-      dimAfterSeconds: Math.max(10, Number(fields.dim.value) || 90),
-      screensaverAfterSeconds: Math.max(30, Number(fields.saver.value) || 300),
+      dimAfterSeconds: Math.max(1, Number(fields.dim.value) || 90),
+      screensaverAfterSeconds: Math.max(1, Number(fields.saver.value) || 300),
       showNowPlaying: fields.nowPlaying.checked,
       showEqualizer: fields.equalizer.checked,
       visualizer: {
@@ -295,6 +296,7 @@ $("#source-close").addEventListener("click", closeSourceDialog);
 
 function nowPlayingEnabled() { return getDisplayConfig(config).showNowPlaying !== false; }
 function equalizerEnabled() { return getDisplayConfig(config).showEqualizer !== false && getDisplayConfig(config).visualizer?.enabled !== false; }
+function screensaverHasMedia() { return Boolean(nowPlayingEnabled() && latestState.nowPlaying?.playing && latestState.nowPlaying?.title); }
 
 function syncEqualizerActivity() {
   const playing = Boolean(latestState.nowPlaying?.playing) && equalizerEnabled() && !document.hidden;
@@ -496,6 +498,7 @@ function rotateScreensaver() {
 
 function refreshScreensaver() {
   if (!screensaverActive || !config) return;
+  screensaverMediaVisible = screensaverHasMedia();
   renderScreensaver(screensaver, activeScreensaver(config), {
     config,
     state: latestState,
@@ -507,6 +510,11 @@ function refreshScreensaver() {
 
 function updateScreensaverLive(extra = {}) {
   if (!screensaverActive || !config) return;
+  const mediaVisible = screensaverHasMedia();
+  if (mediaVisible !== screensaverMediaVisible) {
+    refreshScreensaver();
+    return;
+  }
   updateScreensaverDynamic(screensaver, {
     config,
     state: latestState,
@@ -536,8 +544,8 @@ function resetIdle() {
   syncEqualizerActivity();
   document.body.classList.remove("dimmed"); screensaver.classList.add("hidden"); screensaver.setAttribute("aria-hidden", "true");
   const display = getDisplayConfig(config);
-  inactivityTimer = setTimeout(() => document.body.classList.add("dimmed"), Math.max(10, display.dimAfterSeconds) * 1000);
-  screensaverTimer = setTimeout(showScreensaver, Math.max(30, display.screensaverAfterSeconds) * 1000);
+  inactivityTimer = setTimeout(() => document.body.classList.add("dimmed"), Math.max(1, display.dimAfterSeconds) * 1000);
+  screensaverTimer = setTimeout(showScreensaver, Math.max(1, display.screensaverAfterSeconds) * 1000);
 }
 
 function wakeFromScreensaver(event) {

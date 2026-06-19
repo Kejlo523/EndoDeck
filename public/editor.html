@@ -92,21 +92,18 @@
         <section class="control-section">
           <div class="section-heading"><strong>PROFILE</strong><span>Aktywny profil trafia na telefon</span></div>
           <div class="screensaver-list" id="screensaver-list"></div>
-          <div class="template-row">
-            <select id="screensaver-preset"></select>
-            <button type="button" id="add-screensaver-preset">DODAJ</button>
-          </div>
           <div class="saver-actions-row">
+            <button type="button" id="add-screensaver-blank">NOWY</button>
             <button type="button" id="duplicate-screensaver">DUPLIKUJ</button>
-            <button type="button" id="reset-screensaver">RESET</button>
+            <button type="button" id="reset-screensaver" title="Resetuje tylko aktualnie wybrany motyw. Skrót: Ctrl+Alt+R">RESET</button>
             <button type="button" id="delete-screensaver" class="soft-danger">USUŃ</button>
           </div>
         </section>
         <section class="control-section">
           <div class="section-heading"><strong>EKRAN</strong><span>Timery i multimedia</span></div>
           <div class="two-cols">
-            <label>Przyciemnij po<input id="global-dim" type="number" min="10"><small>sekundach</small></label>
-            <label>Wygaszacz po<input id="global-saver" type="number" min="30"><small>sekundach</small></label>
+            <label>Przyciemnij po<input id="global-dim" type="number" min="1"><small>sekundach</small></label>
+            <label>Wygaszacz po<input id="global-saver" type="number" min="1"><small>sekundach</small></label>
           </div>
           <div class="toggle-grid">
             <label class="check-row"><input id="show-now-playing" type="checkbox"><span>Pokazuj aktualnie odtwarzany utwór</span></label>
@@ -164,7 +161,7 @@
           <div class="saver-element-list" id="saver-element-list"></div>
           <div class="saver-actions-row">
             <button type="button" id="duplicate-saver-element">DUPLIKUJ</button>
-            <button type="button" id="delete-saver-element" class="soft-danger">USUŃ</button>
+            <button type="button" id="delete-saver-element" class="soft-danger" title="Skrót: Delete albo Backspace">USUŃ</button>
           </div>
         </section>
         <section class="control-section">

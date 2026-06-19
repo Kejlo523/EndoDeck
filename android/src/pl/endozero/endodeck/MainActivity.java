@@ -48,6 +48,7 @@ public final class MainActivity extends Activity {
     private boolean nightStandbyEnabled = true;
     private int nightStandbyStartMinute = DEFAULT_NIGHT_START_MINUTE;
     private int nightStandbyEndMinute = DEFAULT_NIGHT_END_MINUTE;
+    private static final int MAX_OFFLINE_BUNDLE_BYTES = 5 * 1024 * 1024;
 
     private final Runnable nightBoundary = new Runnable() {
         @Override
@@ -280,6 +281,9 @@ public final class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        settings.setAllowFileAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
@@ -356,7 +360,7 @@ public final class MainActivity extends Activity {
                 int read;
                 while ((read = reader.read(buffer)) != -1) {
                     body.append(buffer, 0, read);
-                    if (body.length() > 200_000) return;
+                    if (body.length() > MAX_OFFLINE_BUNDLE_BYTES) return;
                 }
             }
             new org.json.JSONObject(body.toString());
@@ -369,7 +373,7 @@ public final class MainActivity extends Activity {
     }
 
     private void storeOfflineBundle(String bundleJson) {
-        if (bundleJson == null || bundleJson.length() > 200_000) return;
+        if (bundleJson == null || bundleJson.length() > MAX_OFFLINE_BUNDLE_BYTES) return;
         String previous = secureStore.get("offline_bundle");
         try { secureStore.put("offline_bundle", bundleJson); } catch (Exception ignored) { return; }
         applyPowerSchedule(bundleJson);

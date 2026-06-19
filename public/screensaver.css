@@ -11,6 +11,7 @@
   background: #060806;
   color: var(--saver-ink);
   isolation: isolate;
+  container-type: inline-size;
 }
 
 .screensaver.screen-renderer {
@@ -113,6 +114,8 @@
   border-radius: 50%;
   background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.045), transparent 48%), var(--saver-surface);
   box-shadow: inset 0 0 0 .55vw rgba(255,255,255,.025), inset 0 0 38px rgba(0,0,0,.35);
+  contain: layout paint style;
+  transform: translateZ(0);
 }
 
 .screen-analog-clock::before {
@@ -142,12 +145,14 @@
   border-radius: 99px;
   background: var(--saver-ink);
   transform-origin: 50% 100%;
+  will-change: transform;
 }
 
 .analog-hand.hour {
   height: 24%;
   width: 4px;
   transform: translateX(-50%) rotate(var(--hour-angle));
+  transition: transform .9s linear;
 }
 
 .analog-hand.minute {
@@ -155,6 +160,7 @@
   width: 3px;
   opacity: .88;
   transform: translateX(-50%) rotate(var(--minute-angle));
+  transition: transform .9s linear;
 }
 
 .analog-hand.second {
@@ -162,7 +168,12 @@
   width: 1px;
   background: var(--saver-accent);
   transform: translateX(-50%) rotate(var(--second-angle));
-  transition: transform .18s linear;
+  animation: analog-second-sweep 60s linear infinite;
+}
+
+@keyframes analog-second-sweep {
+  from { transform: translateX(-50%) rotate(var(--second-angle)); }
+  to { transform: translateX(-50%) rotate(calc(var(--second-angle) + 360deg)); }
 }
 
 .screen-analog-clock b {
@@ -506,7 +517,7 @@
 }
 
 .screen-renderer .eq.playing i {
-  animation: eq-bounce 1.65s steps(6,end) infinite;
+  animation: eq-bounce 1.35s cubic-bezier(.45,0,.2,1) infinite;
   will-change: transform;
 }
 
@@ -565,6 +576,31 @@
   border-radius: 50%;
 }
 
+.screen-element-shape.shape-sun {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255,255,255,.3), transparent 18%),
+    radial-gradient(circle, #ffd27a 0 42%, #ff9b57 68%, rgba(255,155,87,.1) 72%);
+  box-shadow:
+    0 0 2.2vw rgba(255,178,90,.22),
+    0 0 5.4vw rgba(255,132,72,.13);
+}
+
+.screen-element-shape.shape-sun::before,
+.screen-element-shape.shape-sun::after {
+  content: "";
+  position: absolute;
+  inset: -16%;
+  z-index: -1;
+  border-radius: 50%;
+  border: 1px solid rgba(255,191,102,.16);
+}
+
+.screen-element-shape.shape-sun::after {
+  inset: -32%;
+  opacity: .42;
+}
+
 .screen-element-shape.shape-moon {
   overflow: hidden;
   border: 1px solid rgba(226,233,255,.16);
@@ -588,6 +624,26 @@
   background: #070909;
   box-shadow: -.8vw 0 1.4vw rgba(7,9,9,.82);
   transform: translateX(31%);
+}
+
+.screen-element-shape.shape-moon::after {
+  content: "";
+  position: absolute;
+  left: 24%;
+  top: 25%;
+  width: 11%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255,255,255,.12);
+  box-shadow:
+    2.6vw 1.4vw 0 -.18vw rgba(255,255,255,.08),
+    1.1vw 3.4vw 0 -.24vw rgba(255,255,255,.07),
+    3.4vw 4.7vw 0 -.28vw rgba(255,255,255,.06);
+  opacity: .55;
+}
+
+.screen-media-hidden {
+  display: none !important;
 }
 
 .screen-shape-label {
@@ -724,4 +780,353 @@
 
 .screen-renderer-preview[data-preset="system-rings"] .saver-ring {
   width: min(100%, 6.8vw);
+}
+
+.screen-renderer[data-preset="lunar-tide"]::after {
+  opacity: .09;
+  background-image: radial-gradient(rgba(206,220,255,.32) .8px, transparent .8px);
+  background-size: 46px 46px;
+}
+
+.screen-renderer[data-preset="lunar-tide"] .screen-weather-now {
+  grid-template-columns: auto minmax(0,1fr);
+}
+
+.screen-renderer[data-preset="lunar-tide"] .screen-weather-now > strong {
+  font-size: clamp(24px, 4.1vw, 52px);
+}
+
+.screen-renderer[data-preset="solar-atlas"]::after {
+  opacity: .12;
+  background-image: linear-gradient(90deg, rgba(255,191,102,.12) 1px, transparent 1px);
+  background-size: 9vw 100%;
+}
+
+.screen-renderer[data-preset="solar-atlas"] .screen-forecast-day {
+  border-color: rgba(255,191,102,.14);
+  background: rgba(35,24,10,.62);
+}
+
+.screen-renderer[data-preset="analog-bureau"] .screen-analog-clock {
+  border-color: rgba(216,197,155,.24);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(216,197,155,.08), transparent 45%),
+    linear-gradient(145deg,#211b12,#100d09);
+}
+
+.screen-renderer[data-preset="analog-bureau"] .screen-clock,
+.screen-renderer[data-preset="analog-bureau"] .screen-date {
+  letter-spacing: -.02em;
+}
+
+.screen-renderer[data-preset="system-rings"] .saver-ring {
+  width: min(100%, 8.7vw);
+}
+
+.screen-renderer[data-preset="system-rings"] .saver-metric,
+.screen-renderer[data-preset="system-rings"] .saver-network {
+  border: 1px solid rgba(125,242,194,.08);
+  border-radius: 1.1vw;
+  background: rgba(5,15,12,.5);
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-now-playing {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: .75vw;
+  padding-top: 0;
+  text-align: center;
+  border-top: 0;
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-now-copy {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-now-copy b {
+  grid-row: auto;
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-now-copy strong {
+  max-width: 100%;
+  font-size: clamp(18px, 3vw, 34px);
+  font-weight: 500;
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-visualizer.eq {
+  align-items: end;
+  gap: clamp(4px, .55vw, 8px);
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-visualizer.eq i {
+  width: clamp(4px, .55vw, 8px);
+  border-radius: 999px;
+}
+
+.screen-renderer[data-preset="dev-night"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: .08;
+  background: repeating-linear-gradient(0deg, transparent 0 4px, rgba(140,255,152,.22) 5px);
+  mix-blend-mode: screen;
+}
+
+.screen-renderer[data-preset="dev-night"] .screen-clock,
+.screen-renderer[data-preset="dev-night"] .screen-date,
+.screen-renderer[data-preset="dev-night"] .screen-text {
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+.screen-renderer[data-preset="dev-night"] .screen-forecast-day,
+.screen-renderer[data-preset="dev-night"] .saver-metric,
+.screen-renderer[data-preset="dev-night"] .saver-network {
+  border-radius: .35vw;
+  border-color: rgba(140,255,152,.1);
+  background: rgba(3,10,5,.62);
+}
+
+.screen-renderer .screen-clock {
+  font-size: calc(var(--element-size-num, 8) * 1cqw);
+}
+
+.screen-renderer .screen-date,
+.screen-renderer .screen-text {
+  font-size: calc(var(--element-size-num, 1.25) * 1cqw);
+}
+
+.screen-renderer .screen-analog-clock {
+  width: min(100%, 24cqw);
+  box-shadow: inset 0 0 0 .55cqw rgba(255,255,255,.025), inset 0 0 38px rgba(0,0,0,.35);
+}
+
+.screen-renderer .analog-mark {
+  font-size: clamp(10px, 1.1cqw, 16px);
+}
+
+.screen-renderer .screen-analog-clock b {
+  width: .9cqw;
+}
+
+.screen-renderer .screen-weather-now {
+  gap: 1.45cqw;
+}
+
+.screen-renderer .screen-weather-now > span {
+  font-size: clamp(38px, 7cqw, 82px);
+}
+
+.screen-renderer .screen-weather-now > strong {
+  font-size: clamp(36px, 6.8cqw, 78px);
+}
+
+.screen-renderer .screen-weather-now div {
+  gap: .6cqw;
+}
+
+.screen-renderer .screen-weather-now b {
+  font-size: clamp(12px, 1.9cqw, 22px);
+}
+
+.screen-renderer .screen-weather-now small {
+  font-size: clamp(7px, .9cqw, 11px);
+}
+
+.screen-renderer .screen-forecast {
+  gap: .65cqw;
+}
+
+.screen-renderer .screen-forecast-day {
+  padding: .72cqw;
+  border-radius: .9cqw;
+}
+
+.screen-renderer .screen-forecast-day b {
+  font-size: clamp(7px, .85cqw, 10px);
+}
+
+.screen-renderer .screen-forecast-day > span {
+  font-size: clamp(14px, 2.2cqw, 25px);
+}
+
+.screen-renderer .screen-forecast-day strong {
+  font-size: clamp(11px, 1.55cqw, 18px);
+}
+
+.screen-renderer .screen-forecast-day small {
+  font-size: clamp(6px, .72cqw, 8px);
+}
+
+.screen-renderer .screen-sun-mini {
+  margin-top: .25cqw;
+  padding-top: .25cqw;
+}
+
+.screen-renderer .screen-sun-times {
+  gap: .45cqw;
+}
+
+.screen-renderer .screen-sun-times > span {
+  gap: .25cqw;
+  padding: .65cqw;
+  border-radius: .75cqw;
+}
+
+.screen-renderer .screen-sun-times b {
+  font-size: clamp(7px, .85cqw, 10px);
+}
+
+.screen-renderer .screen-sun-times i {
+  font-size: clamp(6px, .7cqw, 8px);
+}
+
+.screen-renderer .screen-chip {
+  gap: .55cqw;
+  font-size: clamp(7px, .95cqw, 11px);
+}
+
+.screen-renderer .screen-chip i {
+  width: .55cqw;
+  height: .55cqw;
+}
+
+.screen-renderer .saver-metric {
+  gap: .45cqw;
+}
+
+.screen-renderer .saver-ring {
+  width: min(100%, 5.1cqw);
+}
+
+.screen-renderer[data-preset="system-rings"] .saver-ring {
+  width: min(100%, 8.7cqw);
+}
+
+.screen-renderer .saver-metric span,
+.screen-renderer .saver-network span {
+  gap: .2cqw;
+}
+
+.screen-renderer .saver-metric small,
+.screen-renderer .saver-network small,
+.screen-renderer .saver-metric b,
+.screen-renderer .saver-network b {
+  font-size: clamp(6px, .75cqw, 9px);
+}
+
+.screen-renderer .saver-network {
+  gap: .7cqw;
+}
+
+.screen-renderer .saver-network > div {
+  gap: .4cqw;
+}
+
+.screen-renderer .screen-now-playing {
+  gap: .9cqw;
+  padding-top: .8cqw;
+}
+
+.screen-renderer .screen-now-copy {
+  gap: .15cqw .8cqw;
+}
+
+.screen-renderer .screen-now-copy b {
+  font-size: clamp(7px, .85cqw, 10px);
+}
+
+.screen-renderer .screen-now-copy strong {
+  font-size: clamp(12px, 1.7cqw, 20px);
+}
+
+.screen-renderer .screen-now-copy span {
+  font-size: clamp(7px, .9cqw, 11px);
+}
+
+.screen-renderer .saver-eq {
+  height: clamp(16px, 1.9cqw, 24px);
+}
+
+.screen-renderer .screen-image-placeholder {
+  border-radius: 1cqw;
+  font-size: clamp(8px, .9cqw, 11px);
+}
+
+.screen-renderer .screen-element-shape {
+  border-radius: .8cqw;
+}
+
+.screen-renderer[data-preset="lunar-tide"] .screen-weather-now > strong {
+  font-size: clamp(24px, 4.1cqw, 52px);
+}
+
+.screen-renderer[data-preset="solar-atlas"]::after {
+  background-size: 9cqw 100%;
+}
+
+.screen-renderer[data-preset="system-rings"] .saver-metric,
+.screen-renderer[data-preset="system-rings"] .saver-network {
+  border-radius: 1.1cqw;
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-now-playing {
+  gap: .75cqw;
+}
+
+.screen-renderer[data-preset="music-wave"] .screen-now-copy strong {
+  font-size: clamp(18px, 3cqw, 34px);
+}
+
+.screensaver-card-preview.screen-renderer .screen-clock {
+  font-size: calc(var(--element-size-num, 8) * .52cqw);
+}
+
+.screensaver-card-preview.screen-renderer .screen-date,
+.screensaver-card-preview.screen-renderer .screen-text {
+  font-size: calc(var(--element-size-num, 1.25) * .52cqw);
+}
+
+.screensaver-card-preview.screen-renderer .screen-weather-now {
+  gap: .45cqw;
+}
+
+.screensaver-card-preview.screen-renderer .screen-weather-now > span,
+.screensaver-card-preview.screen-renderer .screen-weather-now > strong {
+  font-size: clamp(8px, 1.8cqw, 18px);
+}
+
+.screensaver-card-preview.screen-renderer .screen-weather-now b,
+.screensaver-card-preview.screen-renderer .screen-weather-now small,
+.screensaver-card-preview.screen-renderer .screen-chip,
+.screensaver-card-preview.screen-renderer .screen-forecast-day small,
+.screensaver-card-preview.screen-renderer .saver-metric small,
+.screensaver-card-preview.screen-renderer .saver-network small,
+.screensaver-card-preview.screen-renderer .saver-metric b,
+.screensaver-card-preview.screen-renderer .saver-network b {
+  font-size: clamp(4px, .48cqw, 6px);
+}
+
+.screensaver-card-preview.screen-renderer .screen-forecast {
+  gap: 2px;
+}
+
+.screensaver-card-preview.screen-renderer .screen-forecast-day {
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.screensaver-card-preview.screen-renderer .screen-forecast-day > span {
+  font-size: clamp(7px, 1cqw, 10px);
+}
+
+.screensaver-card-preview.screen-renderer .screen-forecast-day strong {
+  font-size: clamp(6px, .8cqw, 9px);
+}
+
+.screensaver-card-preview.screen-renderer .saver-ring {
+  width: min(100%, 2.2cqw);
 }

@@ -17,6 +17,7 @@ let releaseUpdates;
 let startServerFn;
 let ReleaseUpdateManagerClass;
 let restartingServer = false;
+let runtimeRecoveryTimer;
 
 function bootLog(message) {
   if (!process.env.ENDODECK_BOOT_LOG) return;
@@ -258,7 +259,8 @@ async function restartRuntime() {
   restartingServer = true;
   updateTray();
   try {
-    await runtime?.stop();
+    try { await runtime?.stop(); }
+    catch (error) { bootLog(`runtime stop failed during restart: ${error.stack || error.message}`); }
     runtime = null;
     await bootRuntime();
     return { ok: true, port: runtime.port, state: runtime.state };
@@ -266,6 +268,20 @@ async function restartRuntime() {
     restartingServer = false;
     updateTray();
   }
+}
+
+function scheduleRuntimeRecovery(reason) {
+  if (!startServerFn) return;
+  clearTimeout(runtimeRecoveryTimer);
+  bootLog(`runtime recovery scheduled: ${reason}`);
+  runtimeRecoveryTimer = setTimeout(async () => {
+    try {
+      await restartRuntime();
+      bootLog(`runtime recovery finished: ${reason}`);
+    } catch (error) {
+      bootLog(`runtime recovery failed: ${reason}: ${error.stack || error.message}`);
+    }
+  }, 2500);
 }
 
 function configureUpdates(config) {
@@ -327,7 +343,7 @@ app.on("activate", () => {
   if (process.platform === "darwin") openSetup();
 });
 app.on("window-all-closed", (event) => event.preventDefault());
-app.on("before-quit", () => { clearInterval(updateTimer); clearInterval(phoneUpdateTimer); runtime?.stop(); });
+app.on("before-quit", () => { clearInterval(updateTimer); clearInterval(phoneUpdateTimer); clearTimeout(runtimeRecoveryTimer); runtime?.stop(); });
 
 app.whenReady().then(async () => {
   bootLog("electron ready");
@@ -346,6 +362,8 @@ app.whenReady().then(async () => {
   bootLog("ipc registered");
   createTray();
   bootLog("tray created");
+  powerMonitor.on("resume", () => scheduleRuntimeRecovery("system-resume"));
+  powerMonitor.on("unlock-screen", () => scheduleRuntimeRecovery("unlock-screen"));
   configureUpdates(config);
   if (wantsWindow()) openRequestedWindow();
   else if (backgroundLaunch()) bootLog("started in background");
