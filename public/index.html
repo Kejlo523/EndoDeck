@@ -7,6 +7,7 @@
   <title>EndoDeck</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/screensaver.css">
 </head>
 <body>
   <main class="deck-shell">
@@ -50,59 +51,7 @@
     </div>
   </section>
 
-  <section class="screensaver hidden" id="screensaver" aria-hidden="true">
-    <div class="ambient-orbit orbit-a"></div><div class="ambient-orbit orbit-b"></div>
-    <header class="saver-status"><span id="saver-pc"><i></i>PC</span><span id="saver-power">-- mA</span><span id="saver-battery">--%</span></header>
-    <main class="saver-main">
-      <div class="saver-time"><time id="saver-clock"><span id="saver-main-time">00:00</span><small id="saver-seconds">00</small></time><span id="saver-date">---</span></div>
-      <div class="weather-now"><span class="weather-symbol" id="weather-symbol">·</span><strong id="weather-temp">--°</strong><div><b id="weather-city">Warszawa</b><span id="weather-description">Pobieram pogodę</span></div></div>
-      <section class="saver-telemetry" aria-label="Stan komputera">
-        <div class="metric-item" id="metric-cpu-card">
-          <span class="metric-ring">
-            <svg viewBox="0 0 42 42" aria-hidden="true"><circle class="ring-track" cx="21" cy="21" r="16"></circle><circle class="ring-value" id="metric-cpu-ring" cx="21" cy="21" r="16"></circle></svg>
-            <strong id="metric-cpu">--%</strong>
-          </span>
-          <span class="metric-copy"><small>CPU</small><b id="metric-cpu-temp">—</b></span>
-        </div>
-        <div class="metric-item" id="metric-gpu-card">
-          <span class="metric-ring">
-            <svg viewBox="0 0 42 42" aria-hidden="true"><circle class="ring-track" cx="21" cy="21" r="16"></circle><circle class="ring-value" id="metric-gpu-ring" cx="21" cy="21" r="16"></circle></svg>
-            <strong id="metric-gpu">--%</strong>
-          </span>
-          <span class="metric-copy"><small>GPU</small><b id="metric-gpu-temp">—</b></span>
-        </div>
-        <div class="metric-item">
-          <span class="metric-ring">
-            <svg viewBox="0 0 42 42" aria-hidden="true"><circle class="ring-track" cx="21" cy="21" r="16"></circle><circle class="ring-value" id="metric-ram-ring" cx="21" cy="21" r="16"></circle></svg>
-            <strong id="metric-ram">--%</strong>
-          </span>
-          <span class="metric-copy"><small>RAM</small><b id="metric-ram-used">-- GB</b></span>
-        </div>
-        <div class="metric-network-group">
-          <div class="metric-item">
-            <span class="metric-ring metric-net-down">
-              <svg viewBox="0 0 42 42" aria-hidden="true"><circle class="ring-track" cx="21" cy="21" r="16"></circle><circle class="ring-value" id="metric-net-down-ring" cx="21" cy="21" r="16"></circle></svg>
-              <strong id="metric-net-down-value">--</strong>
-            </span>
-            <span class="metric-copy metric-net-copy"><small>↓</small><b id="metric-net-down-unit">MB/s</b></span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-ring metric-net-up">
-              <svg viewBox="0 0 42 42" aria-hidden="true"><circle class="ring-track" cx="21" cy="21" r="16"></circle><circle class="ring-value" id="metric-net-up-ring" cx="21" cy="21" r="16"></circle></svg>
-              <strong id="metric-net-up-value">--</strong>
-            </span>
-            <span class="metric-copy metric-net-copy"><small>↑</small><b id="metric-net-up-unit">MB/s</b></span>
-          </div>
-        </div>
-      </section>
-      <div class="forecast" id="forecast"></div>
-      <div class="saver-now-playing hidden" id="saver-now-playing" aria-hidden="true">
-        <span class="eq saver-eq" id="saver-now-playing-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-        <span class="np-copy"><b>TERAZ GRA</b><strong id="saver-now-playing-title">—</strong><span id="saver-now-playing-artist"></span></span>
-      </div>
-    </main>
-    <footer>DOTKNIJ, ABY WRÓCIĆ DO ENDO DECK</footer>
-  </section>
+  <section class="screensaver hidden" id="screensaver" aria-hidden="true"></section>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

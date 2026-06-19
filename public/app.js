@@ -1,4 +1,5 @@
 import { iconSvg } from "./icon-ui.js";
+import { activeScreensaver, calculateScreensaverBrightness, getDisplayConfig, renderScreensaver, updateScreensaverDynamic, updateScreensaverProtection } from "./screensaver-renderer.js";
 
 const $ = (selector) => document.querySelector(selector);
 const grid = $("#button-grid");
@@ -16,7 +17,6 @@ const fields = {
   equalizer: $("#edit-equalizer")
 };
 const nowPlayingBar = $("#now-playing");
-const saverNowPlaying = $("#saver-now-playing");
 
 let config;
 let currentPage = "home";
@@ -243,9 +243,10 @@ async function trigger(button, element) {
 }
 
 function openSettings() {
+  const display = getDisplayConfig(config);
   fields.accent.value = config.accent;
-  fields.dim.value = String(config.ui?.dimAfterSeconds ?? 90);
-  fields.saver.value = String(config.ui?.screensaverAfterSeconds ?? 300);
+  fields.dim.value = String(display.dimAfterSeconds);
+  fields.saver.value = String(display.screensaverAfterSeconds);
   fields.nowPlaying.checked = nowPlayingEnabled();
   fields.equalizer.checked = equalizerEnabled();
   settingsPanel.classList.remove("hidden"); settingsPanel.setAttribute("aria-hidden", "false");
@@ -257,12 +258,24 @@ settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     config.accent = fields.accent.value;
-    config.ui = {
-      ...(config.ui ?? {}),
+    const display = {
+      ...getDisplayConfig(config),
       dimAfterSeconds: Math.max(10, Number(fields.dim.value) || 90),
       screensaverAfterSeconds: Math.max(30, Number(fields.saver.value) || 300),
       showNowPlaying: fields.nowPlaying.checked,
-      showEqualizer: fields.equalizer.checked
+      showEqualizer: fields.equalizer.checked,
+      visualizer: {
+        ...getDisplayConfig(config).visualizer,
+        enabled: fields.equalizer.checked
+      }
+    };
+    config.ui = {
+      ...(config.ui ?? {}),
+      display,
+      dimAfterSeconds: display.dimAfterSeconds,
+      screensaverAfterSeconds: display.screensaverAfterSeconds,
+      showNowPlaying: display.showNowPlaying,
+      showEqualizer: display.showEqualizer
     };
     const response = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
     const result = await response.json();
@@ -280,13 +293,12 @@ settingsForm.addEventListener("submit", async (event) => {
 $("#settings-trigger").addEventListener("click", openSettings); $("#settings-close").addEventListener("click", closeSettings);
 $("#source-close").addEventListener("click", closeSourceDialog);
 
-function nowPlayingEnabled() { return config?.ui?.showNowPlaying !== false; }
-function equalizerEnabled() { return config?.ui?.showEqualizer !== false; }
+function nowPlayingEnabled() { return getDisplayConfig(config).showNowPlaying !== false; }
+function equalizerEnabled() { return getDisplayConfig(config).showEqualizer !== false && getDisplayConfig(config).visualizer?.enabled !== false; }
 
 function syncEqualizerActivity() {
   const playing = Boolean(latestState.nowPlaying?.playing) && equalizerEnabled() && !document.hidden;
-  $("#now-playing-eq").classList.toggle("playing", playing && !screensaverActive);
-  $("#saver-now-playing-eq").classList.toggle("playing", playing && screensaverActive);
+  $("#now-playing-eq")?.classList.toggle("playing", playing && !screensaverActive);
 }
 
 let nowPlayingVisible = false;
@@ -318,33 +330,27 @@ function renderNowPlaying() {
   if (hasTrack !== nowPlayingVisible) {
     nowPlayingVisible = hasTrack;
     animateNowPlayingBar(nowPlayingBar, hasTrack);
-    animateNowPlayingBar(saverNowPlaying, hasTrack);
   }
 
   syncEqualizerActivity();
+  updateScreensaverLive();
   if (!hasTrack) return;
 
   $("#now-playing-title").textContent = track.title;
   $("#now-playing-artist").textContent = track.artist || "";
-  $("#saver-now-playing-title").textContent = track.title;
-  $("#saver-now-playing-artist").textContent = track.artist || "";
 
   const barEq = $("#now-playing-eq");
-  const saverEq = $("#saver-now-playing-eq");
   barEq.classList.toggle("hidden", !showEq);
-  saverEq.classList.toggle("hidden", !showEq);
 }
 
 function updateState(state) {
   latestState = state;
-  $("#usb-status").classList.toggle("online", Boolean(state.adb)); $("#saver-pc").classList.toggle("online", Boolean(state.adb));
+  $("#usb-status").classList.toggle("online", Boolean(state.adb));
   const battery = state.battery;
   $("#power-status").textContent = battery ? `${battery.currentMa >= 0 ? "+" : ""}${battery.currentMa} mA` : "-- mA";
   $("#battery-status").textContent = battery ? `${battery.percent}%` : "--%";
-  $("#saver-power").textContent = $("#power-status").textContent; $("#saver-battery").textContent = $("#battery-status").textContent;
   applyControlStates();
   renderNowPlaying();
-  renderSystemStats(state.systemStats);
   if (state.error) showErrorOnce(state.error);
   else lastShownError = null;
 }
@@ -408,8 +414,8 @@ function renderSystemStats(stats) {
 function updateClock() {
   const now = new Date();
   const main = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(now);
-  $("#clock").textContent = main; $("#saver-main-time").textContent = main; $("#saver-seconds").textContent = String(now.getSeconds()).padStart(2, "0");
-  $("#saver-date").textContent = new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long" }).format(now);
+  $("#clock").textContent = main;
+  if (screensaverActive) updateScreensaverDynamic(screensaver, { now });
 }
 
 const weatherLabels = { 0:["SŁONECZNIE","☀"],1:["PRAWIE BEZCHMURNIE","◒"],2:["CZĘŚCIOWE ZACHMURZENIE","◑"],3:["POCHMURNO","☁"],45:["MGŁA","≋"],48:["SZADŹ","≋"],51:["MŻAWKA","⋰"],53:["MŻAWKA","⋰"],55:["MŻAWKA","⋰"],61:["DESZCZ","↯"],63:["DESZCZ","↯"],65:["ULEWA","↯"],71:["ŚNIEG","✦"],73:["ŚNIEG","✦"],75:["ŚNIEŻYCA","✦"],80:["PRZELOTNY DESZCZ","↯"],81:["PRZELOTNY DESZCZ","↯"],82:["ULEWA","↯"],95:["BURZA","ϟ"],96:["BURZA Z GRADEM","ϟ"],99:["BURZA Z GRADEM","ϟ"] };
@@ -444,6 +450,7 @@ function applyConfig(nextConfig, resetTimers = true) {
   syncOfflineBundle();
   render(currentPage);
   renderNowPlaying();
+  refreshScreensaver();
   if (resetTimers) resetIdle();
 }
 
@@ -465,19 +472,7 @@ function brightnessPercent(value, fallback) {
   return Math.max(.01, Math.min(1, (Number.isFinite(numeric) ? numeric : fallback) / 100));
 }
 
-function screensaverBrightness(weather, offline = false) {
-  const { date, minute } = cityTime(weather);
-  const today = weather?.daily?.find((day) => day.date === date) ?? weather?.daily?.[0];
-  const sunrise = eventMinute(today?.sunrise);
-  const sunset = eventMinute(today?.sunset);
-  const brightness = config?.ui?.screensaverBrightness ?? {};
-  const levels = offline
-    ? { night: brightnessPercent(brightness.offlineNight, 5), day: brightnessPercent(brightness.offlineDay, 10), twilight: brightnessPercent(brightness.twilight, 9) }
-    : { night: brightnessPercent(brightness.night, 6), day: brightnessPercent(brightness.day, 13), twilight: brightnessPercent(brightness.twilight, 9) };
-  if (sunrise === null || sunset === null) return levels.night;
-  if (Math.abs(minute - sunrise) <= 45 || Math.abs(minute - sunset) <= 45) return levels.twilight;
-  return minute > sunrise && minute < sunset ? levels.day : levels.night;
-}
+function screensaverBrightness(weather, offline = false) { return calculateScreensaverBrightness(config, weather, offline, new Date(), activeScreensaver(config)); }
 
 async function loadWeather() {
   try {
@@ -485,9 +480,9 @@ async function loadWeather() {
     if (!response.ok) return;
     const weather = await response.json();
     latestWeather = weather;
-    renderWeather(weather);
     try { window.NativeDeck?.cacheWeather(JSON.stringify(weather)); } catch { }
     if (screensaverActive) setDeckBrightness(screensaverBrightness(weather));
+    refreshScreensaver();
   } catch { }
 }
 
@@ -496,17 +491,36 @@ function setDeckBrightness(value) {
 }
 
 function rotateScreensaver() {
-  const phase = Math.floor(Date.now() / 300_000);
-  const positions = [[-5, -3], [4, -4], [-3, 4], [5, 3], [0, -5], [-4, 2], [3, 5], [0, 0]];
-  const [x, y] = positions[phase % positions.length];
-  screensaver.style.setProperty("--burn-x", `${x}px`);
-  screensaver.style.setProperty("--burn-y", `${y}px`);
+  if (config) updateScreensaverProtection(screensaver, activeScreensaver(config));
+}
+
+function refreshScreensaver() {
+  if (!screensaverActive || !config) return;
+  renderScreensaver(screensaver, activeScreensaver(config), {
+    config,
+    state: latestState,
+    weather: latestWeather,
+    accent: config.accent,
+    now: new Date()
+  });
+}
+
+function updateScreensaverLive(extra = {}) {
+  if (!screensaverActive || !config) return;
+  updateScreensaverDynamic(screensaver, {
+    config,
+    state: latestState,
+    weather: latestWeather,
+    accent: config.accent,
+    now: new Date(),
+    ...extra
+  });
 }
 
 function showScreensaver() {
   screensaverActive = true;
   document.body.classList.remove("dimmed");
-  rotateScreensaver();
+  refreshScreensaver();
   clearInterval(burnInTimer);
   burnInTimer = setInterval(rotateScreensaver, 300_000);
   screensaver.classList.remove("hidden");
@@ -521,8 +535,9 @@ function resetIdle() {
   screensaverActive = false;
   syncEqualizerActivity();
   document.body.classList.remove("dimmed"); screensaver.classList.add("hidden"); screensaver.setAttribute("aria-hidden", "true");
-  inactivityTimer = setTimeout(() => document.body.classList.add("dimmed"), Math.max(10, config.ui?.dimAfterSeconds ?? 90) * 1000);
-  screensaverTimer = setTimeout(showScreensaver, Math.max(30, config.ui?.screensaverAfterSeconds ?? 300) * 1000);
+  const display = getDisplayConfig(config);
+  inactivityTimer = setTimeout(() => document.body.classList.add("dimmed"), Math.max(10, display.dimAfterSeconds) * 1000);
+  screensaverTimer = setTimeout(showScreensaver, Math.max(30, display.screensaverAfterSeconds) * 1000);
 }
 
 function wakeFromScreensaver(event) {

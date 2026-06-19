@@ -1,9 +1,40 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "port": 8765,
   "title": "ENDO DECK",
   "accent": "#b7f34a",
   "ui": {
+    "display": {
+      "dimAfterSeconds": 90,
+      "screensaverAfterSeconds": 300,
+      "showNowPlaying": true,
+      "showEqualizer": true,
+      "visualizer": {
+        "enabled": true,
+        "quality": "balanced"
+      },
+      "screensaverBrightness": {
+        "night": 6,
+        "twilight": 9,
+        "day": 13,
+        "offlineNight": 5,
+        "offlineDay": 10
+      },
+      "nightStandby": {
+        "enabled": true,
+        "start": "00:00",
+        "end": "07:00"
+      },
+      "protection": {
+        "pixelShift": true,
+        "subtleRotation": true,
+        "compositionRotation": false,
+        "lowBrightnessOled": false,
+        "staticElementLimitMinutes": 12
+      }
+    },
+    "screensaverProfile": "classic-orbit",
+    "screensavers": [],
     "dimAfterSeconds": 90,
     "screensaverAfterSeconds": 300,
     "showNowPlaying": true,

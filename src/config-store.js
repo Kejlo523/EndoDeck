@@ -1,8 +1,9 @@
 import { access, copyFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { dataDir, dataPath, projectRoot, resourcePath } from "./runtime-paths.js";
+import { ensureScreensaverConfig } from "../public/screensaver-presets.js";
 
-const CURRENT_SCHEMA = 1;
+const CURRENT_SCHEMA = 2;
 const configPath = dataPath("config.json");
 const backupDir = dataPath("backups");
 let cached;
@@ -41,6 +42,7 @@ function migrate(config) {
     end: "07:00",
     ...(next.ui.nightStandby ?? {})
   };
+  ensureScreensaverConfig(next);
   next.device = { serial: null, profile: "generic", apkVariant: "universal", modulesPending: false, ...(next.device ?? {}) };
   next.updates = { channel: "beta", automaticDesktop: true, automaticApk: true, ...(next.updates ?? {}) };
   next.runtime = {

@@ -15,9 +15,10 @@ import { buildOfflineBundle } from "./offline-bundle.js";
 import { initializeConfigStore, loadConfig, saveConfig } from "./config-store.js";
 import { loadApiToken, requestToken, tokenMatches } from "./api-auth.js";
 import { listInstalledApps } from "./windows-apps.js";
+import { deleteScreensaverAsset, listScreensaverAssets, readScreensaverAsset, saveScreensaverAsset } from "./screensaver-assets.js";
 import { publicDir } from "./runtime-paths.js";
 
-const mime = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png" };
+const mime = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
 
 function numberSetting(value, fallback, minimum = 500) {
   const number = Number(value);
@@ -81,11 +82,11 @@ function ensureDomPage(nextConfig, localSetup) {
   return config;
 }
 
-async function bodyJson(request) {
+async function bodyJson(request, maxBytes = 200000) {
   let body = "";
   for await (const chunk of request) {
     body += chunk;
-    if (body.length > 200000) throw new Error("Żądanie jest za duże");
+    if (body.length > maxBytes) throw new Error("Żądanie jest za duże");
   }
   return JSON.parse(body || "{}");
 }
@@ -164,6 +165,18 @@ export async function startServer({ onReady, onState } = {}) {
         config = await saveConfig(await bodyJson(request));
         publishConfig();
         return sendJson(response, 200, { ok: true, config });
+      }
+      if (request.method === "GET" && url.pathname === "/api/assets/screensavers") return sendJson(response, 200, await listScreensaverAssets());
+      if (request.method === "POST" && url.pathname === "/api/assets/screensavers") return sendJson(response, 200, await saveScreensaverAsset(await bodyJson(request, 12 * 1024 * 1024)));
+      if (url.pathname.startsWith("/api/assets/screensavers/")) {
+        const id = decodeURIComponent(url.pathname.slice("/api/assets/screensavers/".length));
+        if (request.method === "DELETE") return sendJson(response, 200, await deleteScreensaverAsset(id));
+        if (request.method === "GET") {
+          const asset = await readScreensaverAsset(id);
+          response.writeHead(200, { "Content-Type": asset.mime, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" });
+          response.end(asset.data);
+          return;
+        }
       }
       if (request.method === "GET" && url.pathname === "/api/state") return sendJson(response, 200, state);
       if (request.method === "GET" && url.pathname === "/api/apps") {

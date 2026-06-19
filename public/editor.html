@@ -7,11 +7,16 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/editor.css">
+  <link rel="stylesheet" href="/screensaver.css">
 </head>
 <body>
   <header class="studio-header">
     <div class="studio-brand"><span></span><div><strong>ENDO DECK</strong><small>CONTROL SURFACE STUDIO</small></div></div>
     <div class="header-status"><i></i><span id="header-device">Telefon połączony</span><button type="button" id="open-device-panel">PANEL URZĄDZENIA</button></div>
+    <nav class="studio-mode-nav" aria-label="Sekcje Studio">
+      <button type="button" class="active" data-studio-mode="deck">KAFELKI</button>
+      <button type="button" data-studio-mode="screensavers">WYGASZACZE</button>
+    </nav>
     <div class="header-actions">
       <a href="/devices.html">URZĄDZENIA LAN</a>
       <button type="button" id="export-config">EKSPORT CFG</button>
@@ -21,39 +26,13 @@
     </div>
   </header>
 
-  <main class="studio-layout">
+  <main class="studio-layout" id="deck-studio">
     <aside class="panel global-panel">
       <header class="panel-title"><span>01</span><div><strong>URZĄDZENIE</strong><small>Wygląd, sen i lokalizacja</small></div></header>
       <div class="panel-scroll">
         <section class="control-section">
           <div class="section-heading"><strong>WYGLĄD</strong><span>Globalne ustawienia decka</span></div>
           <label>Kolor akcentu<div class="color-row"><input id="global-accent" type="color"><output id="accent-value"></output></div></label>
-          <div class="two-cols">
-            <label>Przyciemnij po<input id="global-dim" type="number" min="10"><small>sekundach</small></label>
-            <label>Wygaszacz po<input id="global-saver" type="number" min="30"><small>sekundach</small></label>
-          </div>
-        </section>
-        <section class="control-section">
-          <div class="section-heading"><strong>WYGASZACZ</strong><span>Jasność i animacje</span></div>
-          <div class="toggle-grid">
-            <label class="check-row"><input id="show-now-playing" type="checkbox"><span>Pokazuj aktualnie odtwarzany utwór</span></label>
-            <label class="check-row"><input id="show-equalizer" type="checkbox"><span>Włącz lekki visualizer audio</span></label>
-          </div>
-          <div class="brightness-grid">
-            <label>Noc<input id="brightness-night" type="number" min="1" max="100"><small>%</small></label>
-            <label>Wschód/zachód<input id="brightness-twilight" type="number" min="1" max="100"><small>%</small></label>
-            <label>Dzień<input id="brightness-day" type="number" min="1" max="100"><small>%</small></label>
-            <label>Offline noc<input id="brightness-offline-night" type="number" min="1" max="100"><small>%</small></label>
-            <label>Offline dzień<input id="brightness-offline-day" type="number" min="1" max="100"><small>%</small></label>
-          </div>
-        </section>
-        <section class="control-section">
-          <div class="section-heading"><strong>SEN NOCNY</strong><span>Godziny uśpienia telefonu</span></div>
-          <label class="check-row"><input id="night-enabled" type="checkbox"><span>Włącz automatyczny sen, gdy PC jest niedostępny</span></label>
-          <div class="two-cols">
-            <label>Od<input id="night-start" type="time"></label>
-            <label>Do<input id="night-end" type="time"></label>
-          </div>
         </section>
         <section class="control-section location-section">
           <div class="section-heading"><strong>POGODA</strong><span>Kliknij mapę lub wyszukaj miasto</span></div>
@@ -103,6 +82,127 @@
         <button type="button" id="delete-tile" class="delete-tile">USUŃ KAFEL</button>
         <button class="apply-tile" type="submit">ZASTOSUJ DO PODGLĄDU</button>
       </form>
+    </aside>
+  </main>
+
+  <main class="screensaver-studio hidden" id="screensaver-studio">
+    <aside class="panel saver-list-panel">
+      <header class="panel-title"><span>01</span><div><strong>WYGASZACZE</strong><small>Presety, czas i jasność</small></div></header>
+      <div class="panel-scroll">
+        <section class="control-section">
+          <div class="section-heading"><strong>PROFILE</strong><span>Aktywny profil trafia na telefon</span></div>
+          <div class="screensaver-list" id="screensaver-list"></div>
+          <div class="template-row">
+            <select id="screensaver-preset"></select>
+            <button type="button" id="add-screensaver-preset">DODAJ</button>
+          </div>
+          <div class="saver-actions-row">
+            <button type="button" id="duplicate-screensaver">DUPLIKUJ</button>
+            <button type="button" id="reset-screensaver">RESET</button>
+            <button type="button" id="delete-screensaver" class="soft-danger">USUŃ</button>
+          </div>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>EKRAN</strong><span>Timery i multimedia</span></div>
+          <div class="two-cols">
+            <label>Przyciemnij po<input id="global-dim" type="number" min="10"><small>sekundach</small></label>
+            <label>Wygaszacz po<input id="global-saver" type="number" min="30"><small>sekundach</small></label>
+          </div>
+          <div class="toggle-grid">
+            <label class="check-row"><input id="show-now-playing" type="checkbox"><span>Pokazuj aktualnie odtwarzany utwór</span></label>
+            <label class="check-row"><input id="show-equalizer" type="checkbox"><span>Włącz lekki visualizer audio</span></label>
+          </div>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>JASNOŚĆ</strong><span>Osobno dla dnia, nocy i offline</span></div>
+          <div class="brightness-grid">
+            <label>Noc<input id="brightness-night" type="number" min="1" max="100"><small>%</small></label>
+            <label>Wschód/zachód<input id="brightness-twilight" type="number" min="1" max="100"><small>%</small></label>
+            <label>Dzień<input id="brightness-day" type="number" min="1" max="100"><small>%</small></label>
+            <label>Offline noc<input id="brightness-offline-night" type="number" min="1" max="100"><small>%</small></label>
+            <label>Offline dzień<input id="brightness-offline-day" type="number" min="1" max="100"><small>%</small></label>
+          </div>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>SEN NOCNY</strong><span>Twarde wygaszenie bez PC</span></div>
+          <label class="check-row"><input id="night-enabled" type="checkbox"><span>Włącz automatyczny sen, gdy PC jest niedostępny</span></label>
+          <div class="two-cols">
+            <label>Od<input id="night-start" type="time"></label>
+            <label>Do<input id="night-end" type="time"></label>
+          </div>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>OCHRONA</strong><span>Tryby antywypaleniowe</span></div>
+          <label class="check-row"><input id="protect-pixel-shift" type="checkbox"><span>Pixel shift</span></label>
+          <label class="check-row"><input id="protect-subtle-rotation" type="checkbox"><span>Subtelna rotacja pozycji</span></label>
+          <label class="check-row"><input id="protect-composition-rotation" type="checkbox"><span>Rotacja kompozycji</span></label>
+          <label class="check-row"><input id="protect-oled" type="checkbox"><span>Low-bright OLED mode</span></label>
+          <label>Limit statycznych elementów<input id="protect-static-limit" type="number" min="1" max="120"><small>minut</small></label>
+        </section>
+      </div>
+    </aside>
+
+    <section class="panel saver-preview-panel">
+      <header class="panel-title"><span>02</span><div><strong>PODGLĄD LIVE</strong><small id="preview-active-label">Aktywny wygaszacz</small></div></header>
+      <div class="saver-preview-toolbar">
+        <button type="button" id="set-active-screensaver">USTAW JAKO AKTYWNY</button>
+        <button type="button" id="add-saver-element">DODAJ ELEMENT</button>
+        <select id="saver-add-type"></select>
+      </div>
+      <div class="phone-preview-wrap">
+        <div class="phone-preview-frame">
+          <section id="screensaver-preview" class="screensaver-preview-root" aria-label="Podgląd wygaszacza"></section>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel saver-props-panel">
+      <header class="panel-title"><span>03</span><div><strong>ELEMENT</strong><small id="saver-selected-id">---</small></div></header>
+      <div class="panel-scroll">
+        <section class="control-section">
+          <div class="section-heading"><strong>WARSTWY</strong><span>Wybierz element z listy lub podglądu</span></div>
+          <div class="saver-element-list" id="saver-element-list"></div>
+          <div class="saver-actions-row">
+            <button type="button" id="duplicate-saver-element">DUPLIKUJ</button>
+            <button type="button" id="delete-saver-element" class="soft-danger">USUŃ</button>
+          </div>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>POZYCJA</strong><span>Canvas procentowy, snap do siatki</span></div>
+          <label>Nazwa<input id="saver-element-label"></label>
+          <div class="four-cols">
+            <label>X<input id="saver-element-x" type="number" step="1"></label>
+            <label>Y<input id="saver-element-y" type="number" step="1"></label>
+            <label>W<input id="saver-element-w" type="number" min="1" step="1"></label>
+            <label>H<input id="saver-element-h" type="number" min="1" step="1"></label>
+          </div>
+          <div class="two-cols">
+            <label>Warstwa<input id="saver-element-z" type="number" step="1"></label>
+            <label>Rozmiar tekstu<input id="saver-element-size" type="number" min=".5" max="24" step=".1"></label>
+          </div>
+          <div class="two-cols">
+            <label>Kolor<input id="saver-element-color" type="color"></label>
+            <label>Wyrównanie<select id="saver-element-align"><option value="">Auto</option><option value="left">Lewo</option><option value="center">Środek</option><option value="right">Prawo</option></select></label>
+          </div>
+          <div class="two-cols">
+            <label>Przezroczystość<input id="saver-element-opacity" type="number" min="0" max="1" step=".05"></label>
+            <label>Tekst<input id="saver-element-text"></label>
+          </div>
+          <label class="check-row"><input id="saver-element-visible" type="checkbox"><span>Element widoczny</span></label>
+          <label class="check-row"><input id="saver-element-locked" type="checkbox"><span>Zablokuj przeciąganie</span></label>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>TŁO</strong><span>Kolor, gradient albo obraz lokalny</span></div>
+          <label>Typ tła<select id="saver-background-type"><option value="solid">Kolor</option><option value="gradient">Gradient</option><option value="image">Obraz</option></select></label>
+          <label>Wartość<input id="saver-background-value" placeholder="#050705 albo gradient"></label>
+          <label>Kolor akcentu profilu<input id="saver-theme-accent" type="color"></label>
+        </section>
+        <section class="control-section">
+          <div class="section-heading"><strong>ASSETY</strong><span>Obrazy lokalne EndoDeck</span></div>
+          <input id="saver-asset-upload" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <div class="asset-list" id="saver-asset-list"></div>
+        </section>
+      </div>
     </aside>
   </main>
   <div class="studio-toast" id="studio-toast" role="status"></div>

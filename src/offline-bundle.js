@@ -69,6 +69,9 @@ export async function buildOfflineBundle(config) {
     lanHost: getLanHost(),
     port: Number(config.port) || 8765,
     ui: {
+      display: config.ui?.display ?? null,
+      screensaverProfile: config.ui?.screensaverProfile ?? null,
+      screensavers: config.ui?.screensavers ?? null,
       screensaverBrightness: config.ui?.screensaverBrightness ?? null,
       nightStandby: config.ui?.nightStandby ?? null
     },
