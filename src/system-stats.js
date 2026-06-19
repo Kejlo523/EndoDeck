@@ -45,16 +45,23 @@ async function gpuStats() {
   const script = `
     $gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
       Where-Object { $_.Name -and $_.Name -notmatch 'Microsoft Basic|Remote' } |
+      Sort-Object @{ Expression = { if ($_.Name -match 'AMD|Radeon|NVIDIA|GeForce|RTX|GTX|Arc') { 0 } elseif ($_.Name -match 'Intel') { 1 } else { 2 } } }, Name |
       Select-Object -First 1
     if (-not $gpu) { return }
-    $samples = (Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples |
-      Where-Object { $_.Path -match 'engtype_(3d|compute|graphics)' }
-    $usage = [Math]::Min(100, [Math]::Round((($samples | Measure-Object CookedValue -Sum).Sum)))
+    $engineSamples = (Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples |
+      Where-Object { $_.Path -match 'engtype_' -and $_.CookedValue -gt 0 }
+    $usageSum = ($engineSamples | Measure-Object CookedValue -Sum).Sum
+    if ($null -eq $usageSum) { $usageSum = 0 }
+    $usage = [Math]::Min(100, [Math]::Max(0, [Math]::Round([double]$usageSum)))
+    $memorySamples = (Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Usage','\\GPU Adapter Memory(*)\\Shared Usage' -ErrorAction SilentlyContinue).CounterSamples
+    $memoryUsed = ($memorySamples | Measure-Object CookedValue -Sum).Sum
+    if ($null -eq $memoryUsed) { $memoryUsed = 0 }
     [pscustomobject]@{
       name = $gpu.Name
       usage = $usage
+      memoryUsed = [int64]$memoryUsed
       memoryTotal = [int64]$gpu.AdapterRAM
-      provider = 'windows-performance'
+      provider = 'windows-performance-all-engines'
     } | ConvertTo-Json -Compress
   `;
   try {
@@ -66,7 +73,7 @@ async function gpuStats() {
       provider: parsed.provider,
       temperature: null,
       usage: Math.max(0, Math.min(100, Number(parsed.usage))),
-      memoryUsed: null,
+      memoryUsed: Number(parsed.memoryUsed) || null,
       memoryTotal: Number(parsed.memoryTotal) || null
     };
   } catch { return null; }

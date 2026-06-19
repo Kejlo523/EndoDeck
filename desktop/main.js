@@ -70,6 +70,16 @@ function backgroundLaunch() {
   return process.argv.includes("--background") || process.argv.includes("--hidden") || Boolean(loginState.wasOpenedAtLogin);
 }
 
+function wantsWindow(argv = process.argv) {
+  return argv.includes("--open") || argv.includes("--setup") || argv.includes("--studio") || argv.includes("--deck");
+}
+
+function openRequestedWindow(argv = process.argv) {
+  if (argv.includes("--studio")) return openDeck("/editor.html");
+  if (argv.includes("--deck")) return openDeck("/");
+  return openSetup();
+}
+
 function autostartSettings(enabled) {
   return { openAtLogin: Boolean(enabled), path: app.getPath("exe"), args: enabled ? ["--background"] : [] };
 }
@@ -309,8 +319,13 @@ function registerIpc() {
   ipcMain.handle("install-module-updates", (_, serial) => releaseUpdates.installPendingModules(serial));
 }
 
-app.on("second-instance", () => openSetup());
-app.on("activate", () => openSetup());
+app.on("second-instance", (_event, argv) => {
+  if (wantsWindow(argv)) openRequestedWindow(argv);
+  else updateTray();
+});
+app.on("activate", () => {
+  if (process.platform === "darwin") openSetup();
+});
 app.on("window-all-closed", (event) => event.preventDefault());
 app.on("before-quit", () => { clearInterval(updateTimer); clearInterval(phoneUpdateTimer); runtime?.stop(); });
 
@@ -332,7 +347,9 @@ app.whenReady().then(async () => {
   createTray();
   bootLog("tray created");
   configureUpdates(config);
-  if (!backgroundLaunch()) openSetup();
+  if (wantsWindow()) openRequestedWindow();
+  else if (backgroundLaunch()) bootLog("started in background");
+  else bootLog("started tray-only");
 }).catch((error) => {
   bootLog(`fatal: ${error.stack || error.message}`);
   console.error(error);
