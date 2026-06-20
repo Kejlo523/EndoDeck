@@ -15,12 +15,35 @@ wake_screen() {
     if dumpsys power 2>/dev/null | grep -q 'mWakefulness=Asleep'; then input keyevent 26; fi
 }
 
+screen_is_on() {
+    power_state=$(dumpsys power 2>/dev/null)
+    display_state=$(dumpsys display 2>/dev/null)
+    echo "$power_state" | grep -qE 'mWakefulness=Awake|mWakefulness=Dreaming|mInteractive=true|mScreenOn=true|Display Power: state=ON' && return 0
+    echo "$display_state" | grep -qE 'mState=ON|mState=DOZE|state=ON|state=DOZE|Display State: ON|Display State: DOZE|mScreenState=ON' && return 0
+    return 1
+}
+
+screen_state_json() {
+    if screen_is_on; then printf 'on'; else printf 'off'; fi
+}
+
 screen_off() {
-    input keyevent 223
+    settings put system screen_off_timeout 1000
+    input keyevent 223 >/dev/null 2>&1 || input keyevent KEYCODE_SLEEP >/dev/null 2>&1
     sleep 1
-    if dumpsys power 2>/dev/null | grep -qE 'mWakefulness=Awake|Display Power: state=ON'; then
-        input keyevent 26
+    if ! screen_is_on; then return 0; fi
+    input keyevent 26 >/dev/null 2>&1 || input keyevent KEYCODE_POWER >/dev/null 2>&1
+    sleep 1
+    if ! screen_is_on; then return 0; fi
+    input keyevent 223 >/dev/null 2>&1 || input keyevent KEYCODE_SLEEP >/dev/null 2>&1
+    sleep 1
+    if ! screen_is_on; then return 0; fi
+    if screen_is_on; then
+        input keyevent 26 >/dev/null 2>&1 || input keyevent KEYCODE_POWER >/dev/null 2>&1
+        sleep 1
     fi
+    screen_is_on && return 1
+    return 0
 }
 
 case "$1" in
@@ -55,6 +78,9 @@ case "$1" in
         screen_off
         dumpsys deviceidle force-idle >/dev/null 2>&1
         ;;
+    screen-off)
+        screen_off
+        ;;
     sleep)
         settings put global stay_on_while_plugged_in 0
         svc power stayon false >/dev/null 2>&1
@@ -76,10 +102,10 @@ case "$1" in
         usb=$(cat /sys/class/android_usb/android0/state 2>/dev/null)
         [ -z "$usb" ] && usb=$(getprop sys.usb.state)
         if [ -f "$NIGHT_MARKER" ]; then night=true; else night=false; fi
-        printf '{"usb":"%s","night":%s,"sdk":%s}\n' "$usb" "$night" "$(getprop ro.build.version.sdk)"
+        printf '{"usb":"%s","night":%s,"screen":"%s","sdk":%s}\n' "$usb" "$night" "$(screen_state_json)" "$(getprop ro.build.version.sdk)"
         ;;
     *)
-        echo "usage: endodeckctl status|wake|sleep|sleep-night|restore" >&2
+        echo "usage: endodeckctl status|wake|sleep|sleep-night|screen-off|restore" >&2
         exit 2
         ;;
 esac

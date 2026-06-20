@@ -75,6 +75,10 @@
   font-family: Consolas, "Cascadia Mono", monospace;
 }
 
+.screen-telemetry-hidden {
+  display: none !important;
+}
+
 .screen-clock {
   display: flex;
   align-items: flex-end;

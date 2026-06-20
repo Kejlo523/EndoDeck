@@ -213,6 +213,7 @@ export class AdbBridge {
       "endodeck-oem-huawei-ale-l21": "EndoDeck-OEM-Huawei-ALE-L21-Magisk.zip"
     };
     for (const moduleId of diagnosis.profile.modules) {
+      if (moduleId === "endodeck-core" && options[moduleId] === false) continue;
       if (moduleId !== "endodeck-core" && !options[moduleId]) continue;
       await this.installModule(serial, moduleFiles[moduleId]);
     }

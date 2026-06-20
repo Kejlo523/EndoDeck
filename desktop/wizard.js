@@ -85,6 +85,7 @@ function render(device) {
   $("#profile-blocker").textContent = blockers.length ? `Pełny profil Magisk jest jeszcze zablokowany: ${blockers.join(" · ")}` : "";
   $("#profile-blocker").classList.toggle("hidden", !device.connected || device.supported || !blockers.length);
   $("#options").classList.toggle("hidden", !device.connected);
+  $("#core-night").disabled = !(device.connected && device.root && device.magiskCompatible && device.androidCompatible);
   $("#dt2w").disabled = !device.profile?.features.doubleTapWake;
   $("#battery").disabled = !device.profile?.features.batteryGuard;
   $("#dt2w").checked = Boolean(device.profile?.features.doubleTapWake);
@@ -160,6 +161,7 @@ $("#install").addEventListener("click", async () => {
       lockscreenBypass: $("#lockscreen").checked,
       doubleTapWake: $("#dt2w").checked,
       batteryGuard: $("#battery").checked,
+      "endodeck-core": $("#core-night").checked,
       "endodeck-balanced": $("#balanced").checked,
       "endodeck-oem-huawei-ale-l21": $("#dt2w").checked || $("#battery").checked
     } });

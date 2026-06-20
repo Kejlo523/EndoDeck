@@ -45,6 +45,17 @@ function selectedScreensaver() {
 }
 function selectedSaverElement() { return selectedScreensaver()?.elements?.find((entry) => entry.id === selectedSaverElementId) ?? null; }
 
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readNumberField(selector, current, { min = -Infinity, max = Infinity } = {}) {
+  const field = $(selector);
+  if (!field || field.disabled || String(field.value).trim() === "") return current;
+  const numeric = Number(field.value);
+  return Number.isFinite(numeric) ? clampNumber(numeric, min, max) : current;
+}
+
 function saverSnapshot() {
   ensureScreensaverConfig(config);
   return structuredClone({
@@ -435,25 +446,30 @@ function loadSaverProfileControls() {
 function readSaverElementForm() {
   const element = selectedSaverElement();
   if (!element || !$("#saver-element-label")) return;
-  element.label = $("#saver-element-label").value.trim() || element.label;
-  element.x = Number($("#saver-element-x").value);
-  element.y = Number($("#saver-element-y").value);
-  element.w = Math.max(1, Number($("#saver-element-w").value));
-  element.h = Math.max(1, Number($("#saver-element-h").value));
-  element.zIndex = Number($("#saver-element-z").value);
-  element.visible = $("#saver-element-visible").checked;
-  element.locked = $("#saver-element-locked").checked;
+  const label = $("#saver-element-label");
+  if (label && !label.disabled) element.label = label.value.trim() || element.label;
+  element.x = readNumberField("#saver-element-x", element.x, { min: -50, max: 150 });
+  element.y = readNumberField("#saver-element-y", element.y, { min: -50, max: 150 });
+  element.w = readNumberField("#saver-element-w", element.w, { min: 1, max: 200 });
+  element.h = readNumberField("#saver-element-h", element.h, { min: 1, max: 200 });
+  element.zIndex = readNumberField("#saver-element-z", element.zIndex ?? 10, { min: -100, max: 999 });
+  const visible = $("#saver-element-visible");
+  const locked = $("#saver-element-locked");
+  if (visible && !visible.disabled) element.visible = visible.checked;
+  if (locked && !locked.disabled) element.locked = locked.checked;
   element.style ??= {};
-  const color = $("#saver-element-color").value;
-  if (color) element.style.color = color;
-  element.style.align = $("#saver-element-align").value || undefined;
-  const size = Number($("#saver-element-size").value);
+  const color = $("#saver-element-color");
+  if (color && !color.disabled && color.value) element.style.color = color.value;
+  const align = $("#saver-element-align");
+  if (align && !align.disabled) element.style.align = align.value || undefined;
+  const size = readNumberField("#saver-element-size", element.style.size, { min: .5, max: 24 });
   if (Number.isFinite(size) && size > 0) element.style.size = size;
-  const opacity = Number($("#saver-element-opacity").value);
+  const opacity = readNumberField("#saver-element-opacity", element.style.opacity, { min: 0, max: 1 });
   if (Number.isFinite(opacity)) element.style.opacity = Math.max(0, Math.min(1, opacity));
   element.data ??= {};
   if (["text", "image"].includes(element.type)) {
-    const text = $("#saver-element-text").value.trim();
+    const textField = $("#saver-element-text");
+    const text = textField && !textField.disabled ? textField.value.trim() : "";
     if (element.type === "text") element.data.text = text || element.data.text || element.label;
     if (element.type === "image") element.data.src = text || element.data.src || "";
   }
@@ -554,19 +570,32 @@ function renderSaverElementList() {
 
 function addSelectionToPreview() {
   const preview = $("#screensaver-preview");
+  preview.querySelector(".saver-resize-overlay")?.remove();
+  let selectedNode = null;
   preview.querySelectorAll(".screen-element").forEach((node) => {
     const selected = node.dataset.elementId === selectedSaverElementId;
     node.classList.toggle("selected", selected);
+    if (selected) selectedNode = node;
+    node.querySelector(".saver-hitbox")?.remove();
     node.querySelector(".saver-resize-handle")?.remove();
-    if (selected && !node.classList.contains("is-locked")) {
-      const handle = document.createElement("span");
-      handle.className = "saver-resize-handle";
-      handle.setAttribute("aria-hidden", "true");
-      node.append(handle);
+    if (!node.classList.contains("is-locked")) {
+      const hitbox = document.createElement("span");
+      hitbox.className = "saver-hitbox";
+      hitbox.setAttribute("aria-hidden", "true");
+      node.prepend(hitbox);
     }
     node.removeEventListener("pointerdown", startSaverPointer);
     node.addEventListener("pointerdown", startSaverPointer);
   });
+  if (selectedNode && !selectedNode.classList.contains("is-locked")) {
+    const overlay = document.createElement("span");
+    overlay.className = "saver-resize-overlay";
+    overlay.dataset.elementId = selectedSaverElementId;
+    overlay.setAttribute("aria-hidden", "true");
+    positionResizeOverlay(overlay, selectedNode);
+    overlay.addEventListener("pointerdown", startSaverPointer);
+    preview.append(overlay);
+  }
 }
 
 function renderSaverPreview() {
@@ -772,51 +801,89 @@ function snap(value, event) {
   return Math.round(value * 10) / 10;
 }
 
+function saverCanvasRect() {
+  return ($("#screensaver-preview .screen-stage") ?? $("#screensaver-preview")).getBoundingClientRect();
+}
+
+function clientPointToCanvasPercent(event, rect = saverCanvasRect()) {
+  const width = rect.width || 1;
+  const height = rect.height || 1;
+  return {
+    x: ((event.clientX - rect.left) / width) * 100,
+    y: ((event.clientY - rect.top) / height) * 100
+  };
+}
+
+function clampElementToCanvas(entry) {
+  entry.w = clampNumber(entry.w, 3, 100);
+  entry.h = clampNumber(entry.h, 3, 100);
+  entry.x = clampNumber(entry.x, 0, Math.max(0, 100 - entry.w));
+  entry.y = clampNumber(entry.y, 0, Math.max(0, 100 - entry.h));
+}
+
+function positionResizeOverlay(overlay = $("#screensaver-preview .saver-resize-overlay"), node = $("#screensaver-preview .screen-element.selected")) {
+  const preview = $("#screensaver-preview");
+  if (!overlay || !node || !preview) return;
+  const rootRect = preview.getBoundingClientRect();
+  const nodeRect = node.getBoundingClientRect();
+  overlay.style.left = `${nodeRect.right - rootRect.left}px`;
+  overlay.style.top = `${nodeRect.bottom - rootRect.top}px`;
+}
+
 function startSaverPointer(event) {
-  const node = event.currentTarget;
-  const entry = selectedScreensaver()?.elements?.find((item) => item.id === node.dataset.elementId);
+  readSaverElementForm();
+  const overlay = event.currentTarget.classList?.contains("saver-resize-overlay") ? event.currentTarget : null;
+  const node = overlay ? $("#screensaver-preview .screen-element.selected") : event.currentTarget;
+  const entryId = overlay?.dataset.elementId ?? node?.dataset.elementId;
+  const entry = selectedScreensaver()?.elements?.find((item) => item.id === entryId);
   if (!entry) return;
+  const resize = Boolean(overlay || event.target.closest(".saver-resize-handle"));
   selectedSaverElementId = entry.id;
   loadSaverElementForm();
   addSelectionToPreview();
   if (entry.locked) return;
-  const canvasRect = $("#screensaver-preview").getBoundingClientRect();
-  const resize = Boolean(event.target.closest(".saver-resize-handle"));
+  const canvasRect = saverCanvasRect();
   saverPointerState = {
     mode: resize ? "resize" : "move",
     entry,
     node,
     canvasRect,
-    startX: event.clientX,
-    startY: event.clientY,
+    startPoint: clientPointToCanvasPercent(event, canvasRect),
     start: { x: entry.x, y: entry.y, w: entry.w, h: entry.h },
-    history: saverSnapshot()
+    history: saverSnapshot(),
+    pointerTarget: overlay ?? node
   };
-  node.setPointerCapture?.(event.pointerId);
+  saverPointerState.pointerTarget?.setPointerCapture?.(event.pointerId);
   event.preventDefault();
 }
 
 function moveSaverPointer(event) {
   if (!saverPointerState) return;
-  const { mode, entry, node, canvasRect, startX, startY, start } = saverPointerState;
-  const dx = ((event.clientX - startX) / canvasRect.width) * 100;
-  const dy = ((event.clientY - startY) / canvasRect.height) * 100;
+  const { mode, entry, node, canvasRect, startPoint, start } = saverPointerState;
+  const point = clientPointToCanvasPercent(event, canvasRect);
+  const dx = point.x - startPoint.x;
+  const dy = point.y - startPoint.y;
   if (mode === "resize") {
-    entry.w = Math.max(3, snap(start.w + dx, event));
-    entry.h = Math.max(3, snap(start.h + dy, event));
+    entry.x = start.x;
+    entry.y = start.y;
+    entry.w = snap(start.w + dx, event);
+    entry.h = snap(start.h + dy, event);
   } else {
-    entry.x = Math.max(-20, Math.min(120, snap(start.x + dx, event)));
-    entry.y = Math.max(-20, Math.min(120, snap(start.y + dy, event)));
+    entry.x = snap(start.x + dx, event);
+    entry.y = snap(start.y + dy, event);
   }
+  clampElementToCanvas(entry);
   node.style.left = `${entry.x}%`;
   node.style.top = `${entry.y}%`;
   node.style.width = `${entry.w}%`;
   node.style.height = `${entry.h}%`;
+  positionResizeOverlay(undefined, node);
   updateElementFieldsFromModel(entry);
 }
 
 function endSaverPointer() {
   if (!saverPointerState) return;
+  readSaverElementForm();
   pushSaverHistorySnapshot(saverPointerState.history, saverPointerState.mode === "resize" ? "zmiana rozmiaru elementu" : "przesunięcie elementu", { skipIfCurrent: true });
   saverPointerState = null;
   renderSaverElementList();
@@ -1032,7 +1099,9 @@ function swapTiles(source, target) {
   return true;
 }
 
-function loadGlobals() {
+function loadGlobals(options = {}) {
+  const previousProfile = selectedScreensaverId;
+  const previousElement = selectedSaverElementId;
   ensureScreensaverConfig(config);
   const display = getDisplayConfig(config);
   const brightness = display.screensaverBrightness ?? {};
@@ -1042,7 +1111,13 @@ function loadGlobals() {
   $("#brightness-night").value = brightness.night ?? 6; $("#brightness-twilight").value = brightness.twilight ?? 9; $("#brightness-day").value = brightness.day ?? 13; $("#brightness-offline-night").value = brightness.offlineNight ?? 5; $("#brightness-offline-day").value = brightness.offlineDay ?? 10;
   $("#night-enabled").checked = night.enabled !== false; $("#night-start").value = night.start ?? "00:00"; $("#night-end").value = night.end ?? "07:00";
   document.documentElement.style.setProperty("--accent", config.accent); setPlace(config.weather ?? { city: "Warszawa", latitude: 52.2297, longitude: 21.0122 }, false);
-  selectedScreensaverId = config.ui.screensaverProfile ?? "classic-orbit";
+  if (options.preserveScreensaverSelection && config.ui.screensavers.some((profile) => profile.id === previousProfile)) {
+    selectedScreensaverId = previousProfile;
+    const profile = config.ui.screensavers.find((entry) => entry.id === previousProfile);
+    selectedSaverElementId = profile?.elements?.some((entry) => entry.id === previousElement) ? previousElement : profile?.elements?.[0]?.id ?? null;
+  } else {
+    selectedScreensaverId = config.ui.screensaverProfile ?? "classic-orbit";
+  }
   renderTemplates();
   renderSaverStudio();
 }
@@ -1119,7 +1194,7 @@ async function save() {
     const result = await fetchJson("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
     config = assertConfigShape(result.config);
     ensureScreensaverConfig(config);
-    loadGlobals();
+    loadGlobals({ preserveScreensaverSelection: true });
     renderAll();
     notify("Konfiguracja zapisana na EndoDeck");
   } catch (error) { notify(error.message, true); }

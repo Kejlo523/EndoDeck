@@ -469,7 +469,7 @@ public final class MainActivity extends Activity {
             webView.onPause();
             webView.pauseTimers();
         }
-        setWindowBrightness(0.01f);
+        setWindowBrightness(0f);
         runRootCommand("/system/bin/endodeckctl sleep-night");
     }
 

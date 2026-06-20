@@ -248,7 +248,7 @@ function updateTray() {
 }
 
 async function bootRuntime() {
-  runtime = await startServerFn({ onState: updateTray });
+  runtime = await startServerFn({ onState: updateTray, version: app.getVersion() });
   releaseUpdates = new ReleaseUpdateManagerClass({ adb: runtime.adb, currentVersion: app.getVersion(), channel: (await runtime.getConfig()).updates?.channel || "beta" });
   updateTray();
   return runtime;

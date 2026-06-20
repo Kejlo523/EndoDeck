@@ -91,7 +91,8 @@ async function bodyJson(request, maxBytes = 200000) {
   return JSON.parse(body || "{}");
 }
 
-export async function startServer({ onReady, onState } = {}) {
+export async function startServer({ onReady, onState, version } = {}) {
+  const runtimeVersion = version ?? process.env.ENDODECK_VERSION ?? process.env.npm_package_version ?? "dev";
   let config = await initializeConfigStore();
   const apiToken = await loadApiToken();
   const clients = new Set();
@@ -149,7 +150,7 @@ export async function startServer({ onReady, onState } = {}) {
       }
 
       if (request.method === "GET" && url.pathname === "/api/health") {
-        return sendJson(response, 200, { ok: true, version: process.env.npm_package_version ?? "dev", schemaVersion: config.schemaVersion, android: { minSdk: 24, maxSdk: 30 }, state: { adb: state.adb, serial: state.serial, pairedSerial: state.pairedSerial, detectedSerials: state.detectedSerials } });
+        return sendJson(response, 200, { ok: true, version: runtimeVersion, schemaVersion: config.schemaVersion, android: { minSdk: 24, maxSdk: 30 }, state: { adb: state.adb, serial: state.serial, pairedSerial: state.pairedSerial, detectedSerials: state.detectedSerials } });
       }
 
       if (url.pathname.startsWith("/api/") && !authenticated) return sendJson(response, 401, { ok: false, error: "Brak ważnej sesji EndoDeck" });

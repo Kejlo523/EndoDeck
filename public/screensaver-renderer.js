@@ -192,9 +192,9 @@ function applyRootTheme(root, profile, context, options) {
   }
 }
 
-export function updateScreensaverProtection(root, profile) {
+export function updateScreensaverProtection(root, profile, options = {}) {
   const protection = profile?.protection ?? {};
-  if (!root || !protection.pixelShift) {
+  if (!root || options.editing === true || options.disabled === true || !protection.pixelShift) {
     root?.style.setProperty("--saver-shift-x", "0px");
     root?.style.setProperty("--saver-shift-y", "0px");
     root?.style.setProperty("--saver-rotation", "0deg");
@@ -250,6 +250,11 @@ function renderMetric(type, context) {
   const down = dataRateParts(stats.network?.received);
   const up = dataRateParts(stats.network?.sent);
   return `<div class="saver-network"><div>${ringSvg(Math.min(100, ((Number(stats.network?.received) || 0) / (100 * 1024 * 1024)) * 100))}<span><small>↓</small><b>${down.value} ${down.unit}</b></span></div><div>${ringSvg(Math.min(100, ((Number(stats.network?.sent) || 0) / (100 * 1024 * 1024)) * 100))}<span><small>↑</small><b>${up.value} ${up.unit}</b></span></div></div>`;
+}
+
+function pcTelemetryAvailable(context) {
+  const state = context.state ?? {};
+  return context.offline !== true && state.adb === true;
 }
 
 function setText(node, value) {
@@ -359,14 +364,16 @@ function elementHtml(entry, context, config, profile) {
     case "pcStatus":
       return `<span class="screen-chip ${state.adb ? "is-online" : ""}"><i></i>${state.adb ? "PC ONLINE" : "PC OFFLINE"}</span>`;
     case "power":
+      if (!pcTelemetryAvailable(context)) return "";
       return `<span class="screen-chip screen-power">${battery ? `${battery.currentMa >= 0 ? "+" : ""}${battery.currentMa} mA` : "-- mA"}</span>`;
     case "battery":
+      if (!pcTelemetryAvailable(context)) return "";
       return `<span class="screen-chip screen-battery">${battery ? `${battery.percent}%` : "--%"}</span>`;
     case "cpu":
     case "gpu":
     case "ram":
     case "network":
-      if (widgets.telemetry === false) return "";
+      if (widgets.telemetry === false || !pcTelemetryAvailable(context)) return "";
       return renderMetric(entry.type, context);
     case "nowPlaying":
       if (widgets.nowPlaying === false || display.showNowPlaying === false || !nowPlaying?.playing || !nowPlaying?.title) return "";
@@ -414,7 +421,7 @@ export function renderScreensaver(root, profile, context = {}, options = {}) {
     .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
     .map((entry) => renderElement(entry, fullContext, config, activeProfile)));
   root.replaceChildren(stage);
-  updateScreensaverProtection(root, activeProfile);
+  updateScreensaverProtection(root, activeProfile, options);
 }
 
 export function updateScreensaverDynamic(root, context = {}) {
@@ -444,16 +451,22 @@ export function updateScreensaverDynamic(root, context = {}) {
   const battery = state.battery;
   const nowPlaying = state.nowPlaying ?? {};
   const playing = Boolean(nowPlaying.playing && nowPlaying.title);
+  const telemetryVisible = pcTelemetryAvailable(context);
 
   for (const node of root.querySelectorAll(".screen-element-pcStatus .screen-chip")) {
     node.classList.toggle("is-online", Boolean(state.adb));
     node.innerHTML = `<i></i>${state.adb ? "PC ONLINE" : "PC OFFLINE"}`;
   }
-  for (const node of root.querySelectorAll(".screen-element-power .screen-power")) {
-    setText(node, battery ? `${battery.currentMa >= 0 ? "+" : ""}${battery.currentMa} mA` : "-- mA");
+  for (const node of root.querySelectorAll(".screen-element-power, .screen-element-battery, .screen-element-cpu, .screen-element-gpu, .screen-element-ram, .screen-element-network")) {
+    node.classList.toggle("screen-telemetry-hidden", !telemetryVisible);
   }
-  for (const node of root.querySelectorAll(".screen-element-battery .screen-battery")) {
-    setText(node, battery ? `${battery.percent}%` : "--%");
+  if (telemetryVisible) {
+    for (const node of root.querySelectorAll(".screen-element-power .screen-power")) {
+      setText(node, battery ? `${battery.currentMa >= 0 ? "+" : ""}${battery.currentMa} mA` : "-- mA");
+    }
+    for (const node of root.querySelectorAll(".screen-element-battery .screen-battery")) {
+      setText(node, battery ? `${battery.percent}%` : "--%");
+    }
   }
   for (const node of root.querySelectorAll(".screen-now-eq, .screen-visualizer")) {
     node.classList.toggle("playing", playing);
@@ -467,7 +480,9 @@ export function updateScreensaverDynamic(root, context = {}) {
   for (const node of root.querySelectorAll(".screen-now-copy span")) {
     setText(node, nowPlaying.artist || "Odtwarzacz jest w gotowości");
   }
-  for (const type of ["cpu", "gpu", "ram", "network"]) {
-    for (const node of root.querySelectorAll(`.screen-element-${type}`)) updateMetricNode(node, type, state);
+  if (telemetryVisible) {
+    for (const type of ["cpu", "gpu", "ram", "network"]) {
+      for (const node of root.querySelectorAll(`.screen-element-${type}`)) updateMetricNode(node, type, state);
+    }
   }
 }

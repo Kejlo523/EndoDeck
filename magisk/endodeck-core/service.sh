@@ -15,6 +15,7 @@ CTL=/system/bin/endodeckctl
 : "${NIGHT_STANDBY_END_HOUR:=7}"
 : "${NIGHT_STANDBY_START_MINUTE:=$((NIGHT_STANDBY_START_HOUR * 60))}"
 : "${NIGHT_STANDBY_END_MINUTE:=$((NIGHT_STANDBY_END_HOUR * 60))}"
+: "${NIGHT_SCREEN_RETRY_SECONDS:=9}"
 
 if [ "$1" != "--worker" ]; then
     if [ -f "$PIDFILE" ]; then old=$(cat "$PIDFILE" 2>/dev/null); [ -n "$old" ] && kill -0 "$old" 2>/dev/null && exit 0; fi
@@ -52,6 +53,14 @@ external_power() {
     dumpsys battery 2>/dev/null | grep -qE '(AC|USB|Wireless) powered: true'
 }
 
+screen_on() {
+    power_state=$(dumpsys power 2>/dev/null)
+    display_state=$(dumpsys display 2>/dev/null)
+    echo "$power_state" | grep -qE 'mWakefulness=Awake|mWakefulness=Dreaming|mInteractive=true|mScreenOn=true|Display Power: state=ON' && return 0
+    echo "$display_state" | grep -qE 'mState=ON|mState=DOZE|state=ON|state=DOZE|Display State: ON|Display State: DOZE|mScreenState=ON' && return 0
+    return 1
+}
+
 night_active() {
     [ "$NIGHT_STANDBY_ENABLED" = "1" ] || return 1
     hour=$(date '+%H' | sed 's/^0//')
@@ -70,21 +79,36 @@ night_active() {
 
 last=unknown
 disconnected_at=0
+night_screen_retry_at=0
 while true; do
     if usb_configured; then
         disconnected_at=0
+        night_screen_retry_at=0
         if [ "$last" != connected ]; then "$CTL" wake; echo "$(date '+%F %T') PC connected" >> "$LOG"; last=connected; fi
     elif night_active; then
         disconnected_at=0
-        if [ "$last" != night ]; then "$CTL" sleep-night; echo "$(date '+%F %T') night standby" >> "$LOG"; last=night; fi
+        now=$(date +%s)
+        if [ "$last" != night ]; then
+            "$CTL" sleep-night
+            night_screen_retry_at=$now
+            echo "$(date '+%F %T') night standby" >> "$LOG"
+            last=night
+        elif screen_on && [ $((now - night_screen_retry_at)) -ge "$NIGHT_SCREEN_RETRY_SECONDS" ]; then
+            "$CTL" screen-off
+            night_screen_retry_at=$now
+            echo "$(date '+%F %T') night screen-off retry" >> "$LOG"
+        fi
     elif [ -f /data/local/tmp/endodeck-night-standby ]; then
         rm -f /data/local/tmp/endodeck-night-standby
         "$CTL" wake
+        night_screen_retry_at=0
         last=offline
     elif [ "$POWERED_OFFLINE_SCREENSAVER" = "1" ] && external_power; then
         disconnected_at=0
+        night_screen_retry_at=0
         if [ "$last" != offline ]; then "$CTL" wake; echo "$(date '+%F %T') powered offline" >> "$LOG"; last=offline; fi
     else
+        night_screen_retry_at=0
         now=$(date +%s)
         if [ "$last" != disconnected ] && [ "$last" != sleeping ]; then disconnected_at=$now; last=disconnected; fi
         if [ "$last" = disconnected ] && [ $((now - disconnected_at)) -ge "$DISCONNECT_SLEEP_SECONDS" ]; then "$CTL" sleep; last=sleeping; fi
