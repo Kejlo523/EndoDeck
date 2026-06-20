@@ -20,10 +20,12 @@ let screensaverAssets = [];
 let saverPointerState = null;
 let saverUndoStack = [];
 let saverRedoStack = [];
+let saverAddType = "clock";
 const saverHistoryLimit = 80;
 
 const toneLabels = { accent: "Akcent", blue: "Niebieski", green: "Zielony", red: "Czerwony", amber: "Bursztynowy", violet: "Fioletowy", neutral: "Szary" };
 const elementTypeLabels = Object.fromEntries(ELEMENT_TYPES);
+const elementTypeValues = new Set(ELEMENT_TYPES.map(([value]) => value));
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -500,12 +502,16 @@ function loadSaverElementForm() {
 }
 
 function renderSaverPresetOptions() {
-  $("#saver-add-type").replaceChildren(...ELEMENT_TYPES.map(([value, label]) => {
+  const select = $("#saver-add-type");
+  const previous = elementTypeValues.has(select?.value) ? select.value : saverAddType;
+  select.replaceChildren(...ELEMENT_TYPES.map(([value, label]) => {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
     return option;
   }));
+  saverAddType = elementTypeValues.has(previous) ? previous : "clock";
+  select.value = saverAddType;
 }
 
 function saverPreviewBackground(profile) {
@@ -623,8 +629,24 @@ function renderSaverAssets() {
   }));
 }
 
+function captureSaverScrollState() {
+  return Array.from(document.querySelectorAll("#screensaver-studio .panel-scroll, #screensaver-list, #saver-element-list")).map((element) => ({
+    element,
+    top: element.scrollTop,
+    left: element.scrollLeft
+  }));
+}
+
+function restoreSaverScrollState(scrollState) {
+  for (const { element, top, left } of scrollState) {
+    element.scrollTop = top;
+    element.scrollLeft = left;
+  }
+}
+
 function renderSaverStudio() {
   if (!config || !$("#screensaver-studio")) return;
+  const scrollState = captureSaverScrollState();
   ensureScreensaverConfig(config);
   if (!screensavers().some((profile) => profile.id === selectedScreensaverId)) selectedScreensaverId = config.ui.screensaverProfile;
   const profile = selectedScreensaver();
@@ -636,6 +658,8 @@ function renderSaverStudio() {
   loadSaverElementForm();
   renderSaverPreview();
   renderSaverAssets();
+  restoreSaverScrollState(scrollState);
+  requestAnimationFrame(() => restoreSaverScrollState(scrollState));
 }
 
 function setActiveScreensaver() {
@@ -733,11 +757,14 @@ function resetScreensaver() {
 }
 
 function addSaverElement() {
+  const selectedType = $("#saver-add-type")?.value;
+  const type = elementTypeValues.has(selectedType) ? selectedType : elementTypeValues.has(saverAddType) ? saverAddType : "text";
   readSaverProfileControls();
   readSaverElementForm();
-  const profile = selectedScreensaver();
-  const type = $("#saver-add-type").value || "text";
+  if (!selectedScreensaver()) return notify("Najpierw wybierz wygaszacz", true);
   pushSaverHistory("dodanie elementu");
+  const profile = selectedScreensaver();
+  profile.elements ??= [];
   const entry = {
     id: uniqueElementId(type, profile),
     type,
@@ -754,16 +781,19 @@ function addSaverElement() {
   };
   profile.elements.push(entry);
   selectedSaverElementId = entry.id;
+  saverAddType = type;
   renderSaverStudio();
   notify("Dodano element do wygaszacza");
 }
 
 function duplicateSaverElement() {
   readSaverElementForm();
-  const profile = selectedScreensaver();
-  const entry = profile?.elements?.find((item) => item.id === selectedSaverElementId);
-  if (!profile || !entry) return;
+  const entryId = selectedSaverElementId;
+  if (!selectedScreensaver()?.elements?.some((item) => item.id === entryId)) return;
   pushSaverHistory("duplikowanie elementu");
+  const profile = selectedScreensaver();
+  const entry = profile?.elements?.find((item) => item.id === entryId);
+  if (!profile || !entry) return;
   const copy = structuredClone(entry);
   copy.id = uniqueElementId(entry.type, profile);
   copy.label = `${entry.label} copy`;
@@ -777,10 +807,12 @@ function duplicateSaverElement() {
 }
 
 function deleteSaverElement() {
-  const profile = selectedScreensaver();
-  const entry = profile?.elements?.find((item) => item.id === selectedSaverElementId);
-  if (!profile || !entry) return;
+  const entryId = selectedSaverElementId;
+  if (!selectedScreensaver()?.elements?.some((item) => item.id === entryId)) return;
   pushSaverHistory("usunięcie elementu");
+  const profile = selectedScreensaver();
+  const entry = profile?.elements?.find((item) => item.id === entryId);
+  if (!profile || !entry) return;
   profile.elements = profile.elements.filter((item) => item.id !== entry.id);
   selectedSaverElementId = profile.elements[0]?.id ?? null;
   renderSaverStudio();
@@ -1262,6 +1294,9 @@ if ($("#add-screensaver-preset")) $("#add-screensaver-preset").addEventListener(
 $("#duplicate-screensaver").addEventListener("click", duplicateScreensaver);
 $("#delete-screensaver").addEventListener("click", deleteScreensaver);
 $("#reset-screensaver").addEventListener("click", resetScreensaver);
+$("#saver-add-type").addEventListener("change", (event) => {
+  saverAddType = elementTypeValues.has(event.target.value) ? event.target.value : "clock";
+});
 $("#add-saver-element").addEventListener("click", addSaverElement);
 $("#duplicate-saver-element").addEventListener("click", duplicateSaverElement);
 $("#delete-saver-element").addEventListener("click", deleteSaverElement);
