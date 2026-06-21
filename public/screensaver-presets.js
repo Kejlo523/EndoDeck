@@ -33,6 +33,13 @@ export const PRESET_LABELS = {
 
 const DEFAULT_BRIGHTNESS = { night: 6, twilight: 9, day: 13, offlineNight: 5, offlineDay: 10 };
 const DEFAULT_NIGHT = { enabled: true, start: "00:00", end: "07:00" };
+const DEFAULT_MOTION = {
+  mode: "adaptive",
+  activeSeconds: 45,
+  ecoAfterSeconds: 90,
+  hideAnalogSecondInEco: true,
+  freezeEqualizerInEco: true
+};
 const DEFAULT_PROTECTION = {
   pixelShift: true,
   subtleRotation: true,
@@ -255,6 +262,8 @@ export function normalizeBrightness(value = {}) {
 export function normalizeDisplayConfig(ui = {}) {
   const display = ui.display ?? {};
   const brightness = normalizeBrightness(display.screensaverBrightness ?? ui.screensaverBrightness);
+  const motionInput = display.motion ?? ui.motion ?? {};
+  const motionMode = ["full", "adaptive", "eco"].includes(motionInput.mode) ? motionInput.mode : DEFAULT_MOTION.mode;
   const nightStandby = {
     ...DEFAULT_NIGHT,
     ...(display.nightStandby ?? ui.nightStandby ?? {})
@@ -278,6 +287,15 @@ export function normalizeDisplayConfig(ui = {}) {
     protection: {
       ...DEFAULT_PROTECTION,
       ...(display.protection ?? {})
+    },
+    motion: {
+      ...DEFAULT_MOTION,
+      ...motionInput,
+      mode: motionMode,
+      activeSeconds: numberOr(motionInput.activeSeconds, DEFAULT_MOTION.activeSeconds, 5, 600),
+      ecoAfterSeconds: numberOr(motionInput.ecoAfterSeconds, DEFAULT_MOTION.ecoAfterSeconds, 10, 3600),
+      hideAnalogSecondInEco: motionInput.hideAnalogSecondInEco !== false,
+      freezeEqualizerInEco: motionInput.freezeEqualizerInEco !== false
     }
   };
 }
@@ -325,6 +343,7 @@ export function ensureScreensaverConfig(config) {
   next.ui.showEqualizer = next.ui.display.showEqualizer;
   next.ui.screensaverBrightness = normalizeBrightness(next.ui.display.screensaverBrightness);
   next.ui.nightStandby = { ...next.ui.display.nightStandby };
+  next.ui.motion = { ...next.ui.display.motion };
 
   const defaults = createDefaultScreensavers(next.accent);
   const existing = Array.isArray(next.ui.screensavers) ? next.ui.screensavers : [];

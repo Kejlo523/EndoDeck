@@ -343,10 +343,12 @@ function registerIpc() {
   ipcMain.handle("device-pair", (_, serial) => runtime.adb.pair(serial));
   ipcMain.handle("device-install-apk", (_, serial) => runtime.adb.installApplication(serial));
   ipcMain.handle("device-install", (_, request) => runtime.adb.installProfile(request.serial, request.options));
+  ipcMain.handle("device-screen-off-diagnostics", (_, serial) => runtime.adb.screenOffDiagnostics(serial));
   ipcMain.handle("device-reboot", (_, serial) => runtime.adb.run(["-s", serial, "reboot"], 10000).then(() => ({ ok: true })));
   ipcMain.handle("open-studio", () => openDeck("/editor.html"));
   ipcMain.handle("open-device-panel", () => openSetup());
   ipcMain.handle("open-data", () => shell.openPath(app.getPath("userData")));
+  ipcMain.handle("open-artifacts", () => shell.openPath(process.env.ENDODECK_ARTIFACTS_DIR || join(app.getAppPath(), "dist")));
   ipcMain.handle("set-autostart", (_, enabled) => setAutostart(enabled));
   ipcMain.handle("get-autostart", () => getAutostartState());
   ipcMain.handle("check-updates", async () => {

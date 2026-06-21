@@ -155,6 +155,8 @@
     let switchStates = {};
     const busySwitches = new Set();
     const switchTimers = new Map();
+    let saverShownAt = Date.now();
+    let lastMotionActivityAt = Date.now();
 
     const toneMap = { accent:"#b7f34a", green:"#62e49b", red:"#ff6663", blue:"#58b9ff", amber:"#ffc15c", violet:"#9f8dff", neutral:"#a7ada4" };
     const defaultWeather = {
@@ -209,11 +211,36 @@
       return rewriteScreensaverAssets(config);
     }
 
+    function isPowerConstrainedDevice() {
+      try { return window.NativeDeck?.isPowerConstrainedDevice?.() === true; }
+      catch { return /Android\s+7|Android\/7/i.test(navigator.userAgent || ""); }
+    }
+
+    function motionConfig(config) {
+      return config.ui?.display?.motion ?? config.ui?.motion ?? { mode: "adaptive", activeSeconds: 45, ecoAfterSeconds: 90 };
+    }
+
+    function markMotionActivity() {
+      lastMotionActivityAt = Date.now();
+    }
+
+    function offlineMotionState(config) {
+      const motion = motionConfig(config);
+      if (motion.mode === "full") return "full";
+      if (motion.mode === "eco") return "eco";
+      if (!isPowerConstrainedDevice()) return "full";
+      const activeMs = Math.max(5, Number(motion.activeSeconds) || 45) * 1000;
+      const ecoMs = Math.max(10, Number(motion.ecoAfterSeconds) || 90) * 1000;
+      const reference = Math.max(saverShownAt || 0, lastMotionActivityAt || 0);
+      return reference && Date.now() - reference < Math.max(activeMs, ecoMs) ? "full" : "eco";
+    }
+
     function screensaverContext(config) {
       return {
         config,
         accent: config.accent,
         offline: true,
+        motionState: offlineMotionState(config),
         weather: cachedWeather || defaultWeather,
         now: new Date(),
         state: {
@@ -253,7 +280,8 @@
     }
 
     function updateClock() {
-      updateScreensaverDynamic(saver, screensaverContext(offlineConfig()));
+      const config = offlineConfig();
+      updateScreensaverDynamic(saver, screensaverContext(config));
     }
 
     function renderWeather(weather) {
@@ -444,6 +472,7 @@
     }
 
     function showSaver() {
+      saverShownAt = Date.now();
       renderOfflineScreensaver();
       notice.classList.add("hidden");
       saver.classList.add("visible");
@@ -452,6 +481,7 @@
     }
 
     function showNotice() {
+      markMotionActivity();
       clearTimeout(noticeTimer);
       clearInterval(burnInTimer);
       notice.classList.remove("hidden");
@@ -461,6 +491,7 @@
     }
 
     document.addEventListener("pointerdown", (event) => {
+      markMotionActivity();
       if (event.target.closest(".offline-panel")) return;
       showNotice();
     }, { passive: true });

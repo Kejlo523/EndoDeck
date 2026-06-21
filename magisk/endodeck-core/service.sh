@@ -56,9 +56,42 @@ external_power() {
 screen_on() {
     power_state=$(dumpsys power 2>/dev/null)
     display_state=$(dumpsys display 2>/dev/null)
+    echo "$power_state" | grep -qE 'Display Power: state=OFF|mScreenOn=false' && return 1
     echo "$power_state" | grep -qE 'mWakefulness=Awake|mWakefulness=Dreaming|mInteractive=true|mScreenOn=true|Display Power: state=ON' && return 0
     echo "$display_state" | grep -qE 'mState=ON|mState=DOZE|state=ON|state=DOZE|Display State: ON|Display State: DOZE|mScreenState=ON' && return 0
     return 1
+}
+
+run_ctl() {
+    timeout=$1
+    shift
+    out="/data/local/tmp/endodeck-core-step-$$.log"
+    rm -f "$out"
+    "$CTL" "$@" >"$out" 2>&1 &
+    pid=$!
+    left=$timeout
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ "$left" -le 0 ]; then
+            kill "$pid" 2>/dev/null
+            sleep 1
+            kill -9 "$pid" 2>/dev/null
+            wait "$pid" 2>/dev/null
+            echo "$(date '+%F %T') ctl timeout: $*" >> "$LOG"
+            [ -s "$out" ] && sed 's/^/  /' "$out" >> "$LOG"
+            rm -f "$out"
+            return 124
+        fi
+        sleep 1
+        left=$((left - 1))
+    done
+    wait "$pid"
+    code=$?
+    if [ "$code" != "0" ]; then
+        echo "$(date '+%F %T') ctl exit=$code: $*" >> "$LOG"
+        [ -s "$out" ] && sed 's/^/  /' "$out" >> "$LOG"
+    fi
+    rm -f "$out"
+    return "$code"
 }
 
 night_active() {
@@ -85,46 +118,46 @@ while true; do
         disconnected_at=0
         now=$(date +%s)
         if [ "$last" != night ]; then
-            "$CTL" sleep-night
+            run_ctl 35 sleep-night --trace
             night_screen_retry_at=$now
             echo "$(date '+%F %T') night standby marker" >> "$LOG"
             last=night
         elif screen_on && [ $((now - night_screen_retry_at)) -ge "$NIGHT_SCREEN_RETRY_SECONDS" ]; then
-            "$CTL" screen-off
+            run_ctl 20 screen-off --trace
             night_screen_retry_at=$now
             echo "$(date '+%F %T') night screen-off retry" >> "$LOG"
         fi
     elif usb_configured; then
         disconnected_at=0
         night_screen_retry_at=0
-        if [ "$last" != connected ]; then "$CTL" wake; echo "$(date '+%F %T') PC connected" >> "$LOG"; last=connected; fi
+        if [ "$last" != connected ]; then run_ctl 25 wake; echo "$(date '+%F %T') PC connected" >> "$LOG"; last=connected; fi
     elif night_active; then
         disconnected_at=0
         now=$(date +%s)
         if [ "$last" != night ]; then
-            "$CTL" sleep-night
+            run_ctl 35 sleep-night --trace
             night_screen_retry_at=$now
             echo "$(date '+%F %T') night standby" >> "$LOG"
             last=night
         elif screen_on && [ $((now - night_screen_retry_at)) -ge "$NIGHT_SCREEN_RETRY_SECONDS" ]; then
-            "$CTL" screen-off
+            run_ctl 20 screen-off --trace
             night_screen_retry_at=$now
             echo "$(date '+%F %T') night screen-off retry" >> "$LOG"
         fi
     elif [ -f /data/local/tmp/endodeck-night-standby ]; then
         rm -f /data/local/tmp/endodeck-night-standby
-        "$CTL" wake
+        run_ctl 25 wake
         night_screen_retry_at=0
         last=offline
     elif [ "$POWERED_OFFLINE_SCREENSAVER" = "1" ] && external_power; then
         disconnected_at=0
         night_screen_retry_at=0
-        if [ "$last" != offline ]; then "$CTL" wake; echo "$(date '+%F %T') powered offline" >> "$LOG"; last=offline; fi
+        if [ "$last" != offline ]; then run_ctl 25 wake; echo "$(date '+%F %T') powered offline" >> "$LOG"; last=offline; fi
     else
         night_screen_retry_at=0
         now=$(date +%s)
         if [ "$last" != disconnected ] && [ "$last" != sleeping ]; then disconnected_at=$now; last=disconnected; fi
-        if [ "$last" = disconnected ] && [ $((now - disconnected_at)) -ge "$DISCONNECT_SLEEP_SECONDS" ]; then "$CTL" sleep; last=sleeping; fi
+        if [ "$last" = disconnected ] && [ $((now - disconnected_at)) -ge "$DISCONNECT_SLEEP_SECONDS" ]; then run_ctl 25 sleep; last=sleeping; fi
     fi
     sleep 3
 done

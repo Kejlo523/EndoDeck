@@ -178,6 +178,8 @@ function applyRootTheme(root, profile, context, options) {
   root.classList.add("screen-renderer");
   root.classList.toggle("screen-renderer-preview", options.preview === true);
   root.classList.toggle("screen-renderer-editing", options.editing === true);
+  root.classList.toggle("screen-renderer-optimized", options.optimizeAnimations === true || context.optimizeAnimations === true);
+  applyMotionState(root, context.config ?? {}, context, options);
   root.dataset.preset = profile.preset;
   root.dataset.screensaverId = profile.id;
   root.style.setProperty("--saver-accent", theme.accent || context.accent || "#b7f34a");
@@ -194,6 +196,19 @@ function applyRootTheme(root, profile, context, options) {
   } else {
     root.style.background = background.value || "#060806";
   }
+}
+
+function applyMotionState(root, config, context = {}, options = {}) {
+  const motion = getDisplayConfig(config).motion ?? {};
+  const motionState = context.motionState === "eco" || options.motionState === "eco" || motion.mode === "eco" ? "eco" : "full";
+  const motionKey = `${motionState}:${motion.hideAnalogSecondInEco !== false}:${motion.freezeEqualizerInEco !== false}`;
+  if (root.dataset.motionKey === motionKey) return;
+  root.classList.toggle("screen-renderer-motion-eco", motionState === "eco");
+  root.classList.toggle("screen-renderer-motion-full", motionState !== "eco");
+  root.classList.toggle("screen-renderer-motion-hide-second", motionState === "eco" && motion.hideAnalogSecondInEco !== false);
+  root.classList.toggle("screen-renderer-motion-freeze-eq", motionState === "eco" && motion.freezeEqualizerInEco !== false);
+  root.dataset.motionState = motionState;
+  root.dataset.motionKey = motionKey;
 }
 
 export function updateScreensaverProtection(root, profile, options = {}) {
@@ -427,6 +442,33 @@ function renderElement(entry, context, config, profile) {
   return node;
 }
 
+function nodes(root, selector) {
+  return Array.from(root.querySelectorAll(selector));
+}
+
+function cacheDynamicNodes(root) {
+  root.__endoDynamicCache = {
+    clocks: nodes(root, ".screen-element-clock .screen-clock"),
+    dates: nodes(root, ".screen-element-date .screen-date"),
+    analogs: nodes(root, ".screen-analog-clock"),
+    pcChips: nodes(root, ".screen-element-pcStatus .screen-chip"),
+    telemetryElements: nodes(root, ".screen-element-power, .screen-element-battery, .screen-element-cpu, .screen-element-gpu, .screen-element-ram, .screen-element-network"),
+    powers: nodes(root, ".screen-element-power .screen-power"),
+    batteries: nodes(root, ".screen-element-battery .screen-battery"),
+    eqs: nodes(root, ".screen-now-eq, .screen-visualizer"),
+    mediaElements: nodes(root, ".screen-element-nowPlaying, .screen-element-visualizer"),
+    nowTitles: nodes(root, ".screen-now-copy strong"),
+    nowArtists: nodes(root, ".screen-now-copy span"),
+    metrics: {
+      cpu: nodes(root, ".screen-element-cpu"),
+      gpu: nodes(root, ".screen-element-gpu"),
+      ram: nodes(root, ".screen-element-ram"),
+      network: nodes(root, ".screen-element-network")
+    }
+  };
+  return root.__endoDynamicCache;
+}
+
 export function renderScreensaver(root, profile, context = {}, options = {}) {
   if (!root) return;
   const config = context.config ?? {};
@@ -436,7 +478,9 @@ export function renderScreensaver(root, profile, context = {}, options = {}) {
     ...context,
     state: { ...demoScreensaverContext().state, ...(context.state ?? {}) },
     weather: context.weather ?? demoWeather(),
-    now: context.now ?? new Date()
+    now: context.now ?? new Date(),
+    optimizeAnimations: options.optimizeAnimations === true || context.optimizeAnimations === true,
+    motionState: options.motionState ?? context.motionState ?? "full"
   };
   applyRootTheme(root, activeProfile, fullContext, options);
   const stage = document.createElement("div");
@@ -446,25 +490,33 @@ export function renderScreensaver(root, profile, context = {}, options = {}) {
     .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
     .map((entry) => renderElement(entry, fullContext, config, activeProfile)));
   root.replaceChildren(stage);
+  cacheDynamicNodes(root);
   updateScreensaverProtection(root, activeProfile, options);
 }
 
 export function updateScreensaverDynamic(root, context = {}) {
   if (!root) return;
+  if (context.config) applyMotionState(root, context.config, context);
+  const cache = root.__endoDynamicCache ?? cacheDynamicNodes(root);
   const now = context.now ?? new Date();
   const clock = formatClock(now);
-  for (const node of root.querySelectorAll(".screen-element-clock .screen-clock")) {
+  for (const node of cache.clocks) {
     const main = node.querySelector("span");
     const seconds = node.querySelector("small");
     if (main && main.textContent !== clock.main) main.textContent = clock.main;
     if (seconds && seconds.textContent !== clock.seconds) seconds.textContent = clock.seconds;
   }
   const date = formatDate(now);
-  for (const node of root.querySelectorAll(".screen-element-date .screen-date")) {
+  for (const node of cache.dates) {
     if (node.textContent !== date) node.textContent = date;
   }
   const angles = analogAngles(now);
-  for (const node of root.querySelectorAll(".screen-analog-clock")) {
+  for (const node of cache.analogs) {
+    const optimize = context.optimizeAnimations === true;
+    const lastSync = Number(node.dataset.lastAnalogSync || 0);
+    const needsSync = !optimize || !lastSync || now.getTime() - lastSync > 15_000;
+    if (!needsSync) continue;
+    node.dataset.lastAnalogSync = String(now.getTime());
     const syncSecond = context.syncAnalogSecond === true || !node.style.getPropertyValue("--second-angle");
     node.style.setProperty("--hour-angle", `${angles.hour}deg`);
     node.style.setProperty("--minute-angle", `${angles.minute}deg`);
@@ -478,36 +530,36 @@ export function updateScreensaverDynamic(root, context = {}) {
   const playing = Boolean(nowPlaying.playing && nowPlaying.title);
   const telemetryVisible = pcTelemetryAvailable(context);
 
-  for (const node of root.querySelectorAll(".screen-element-pcStatus .screen-chip")) {
+  for (const node of cache.pcChips) {
     node.classList.toggle("is-online", Boolean(state.adb));
     node.innerHTML = `<i></i>${state.adb ? "PC ONLINE" : "PC OFFLINE"}`;
   }
-  for (const node of root.querySelectorAll(".screen-element-power, .screen-element-battery, .screen-element-cpu, .screen-element-gpu, .screen-element-ram, .screen-element-network")) {
+  for (const node of cache.telemetryElements) {
     node.classList.toggle("screen-telemetry-hidden", !telemetryVisible);
   }
   if (telemetryVisible) {
-    for (const node of root.querySelectorAll(".screen-element-power .screen-power")) {
+    for (const node of cache.powers) {
       setText(node, battery ? `${battery.currentMa >= 0 ? "+" : ""}${battery.currentMa} mA` : "-- mA");
     }
-    for (const node of root.querySelectorAll(".screen-element-battery .screen-battery")) {
+    for (const node of cache.batteries) {
       setText(node, battery ? `${battery.percent}%` : "--%");
     }
   }
-  for (const node of root.querySelectorAll(".screen-now-eq, .screen-visualizer")) {
+  for (const node of cache.eqs) {
     node.classList.toggle("playing", playing);
   }
-  for (const node of root.querySelectorAll(".screen-element-nowPlaying, .screen-element-visualizer")) {
+  for (const node of cache.mediaElements) {
     node.classList.toggle("screen-media-hidden", !playing);
   }
-  for (const node of root.querySelectorAll(".screen-now-copy strong")) {
+  for (const node of cache.nowTitles) {
     setText(node, nowPlaying.title || "Nic nie gra");
   }
-  for (const node of root.querySelectorAll(".screen-now-copy span")) {
+  for (const node of cache.nowArtists) {
     setText(node, nowPlaying.artist || "Odtwarzacz jest w gotowości");
   }
   if (telemetryVisible) {
     for (const type of ["cpu", "gpu", "ram", "network"]) {
-      for (const node of root.querySelectorAll(`.screen-element-${type}`)) updateMetricNode(node, type, state);
+      for (const node of cache.metrics[type]) updateMetricNode(node, type, state);
     }
   }
 }

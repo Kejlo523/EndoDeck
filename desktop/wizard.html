@@ -62,6 +62,11 @@
       <label><input id="battery" type="checkbox"><span><b>Battery Guard</b><small>Aktywowany wyłącznie dla rozpoznanego kontrolera ładowania.</small></span></label>
     </section>
 
+    <section id="screen-diagnostics" class="diagnostics hidden">
+      <div><small>DIAGNOSTYKA</small><h2>Screen-off trace</h2></div>
+      <pre id="screen-diagnostics-output">Jeszcze nie uruchamiano testu.</pre>
+    </section>
+
     <section class="compat-card">
       <small>ZGODNOŚĆ</small>
       <ul id="compatibility"><li>Android 7-11</li><li>Root + Magisk</li><li>System WebView</li></ul>
@@ -76,10 +81,12 @@
         <button id="scan">SKANUJ USB</button>
         <button id="install-apk" disabled>INSTALUJ APK</button>
         <button id="install" disabled>INSTALUJ MAGISK</button>
+        <button id="screen-off-test" disabled>DIAGNOSTYKA SCREEN-OFF</button>
       </div>
       <div class="dock-tools">
         <button id="restart-server" class="secondary">Restart serwera</button>
         <button id="updates" class="secondary">Aktualizacje</button>
+        <button id="artifacts" class="secondary">Paczki Magisk/APK</button>
         <button id="data" class="secondary">Dane aplikacji</button>
         <label class="autostart"><input id="autostart" type="checkbox"> Start z Windows</label>
       </div>

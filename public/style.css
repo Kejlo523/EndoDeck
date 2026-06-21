@@ -67,6 +67,8 @@ body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity
 .page-entering .deck-button { animation:tile-enter 360ms cubic-bezier(.16,.8,.26,1) both; animation-delay:var(--enter-delay,0ms); }
 .deck-button.pressed { transform:scale(.965); border-color:color-mix(in srgb,var(--tone) 65%,transparent); background:color-mix(in srgb,var(--tone) 8%,var(--surface)); box-shadow:inset 0 0 18px color-mix(in srgb,var(--tone) 10%,transparent),0 2px 8px rgba(0,0,0,.22); transition-duration:45ms; }
 .deck-button.pressed .icon { transform:scale(.94); transition-duration:45ms; }
+.deck-button.is-pending { border-color:color-mix(in srgb,var(--tone) 42%,transparent); }
+.deck-button.is-queued::before { border-color:color-mix(in srgb,var(--tone) 28%,transparent); }
 .deck-button.is-on { border-color:color-mix(in srgb,var(--tone) 58%,transparent); background:color-mix(in srgb,var(--tone) 12%,var(--surface)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 14%,transparent),0 0 24px color-mix(in srgb,var(--tone) 12%,transparent); }
 .deck-button.is-on::before { border-color:color-mix(in srgb,var(--tone) 16%,transparent); }
 .deck-button.is-on .icon { transform:scale(1.08); filter:drop-shadow(0 0 13px color-mix(in srgb,var(--tone) 48%,transparent)); }
@@ -77,6 +79,8 @@ body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity
 .mixer-loading,.mixer-empty { min-height:80px; display:grid; place-items:center; padding:16px; color:var(--muted); text-align:center; font:9px/1.5 Consolas,monospace; }
 .mixer-channels { min-height:0; overflow-y:auto; padding-right:4px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:min-content; gap:7px; scrollbar-width:thin; }
 .mixer-channel { min-width:0; min-height:78px; padding:10px 12px; display:grid; align-content:center; gap:11px; border:1px solid var(--line); border-radius:10px; background:#090b09; }
+.mixer-channel.is-editing { border-color:color-mix(in srgb,var(--accent) 42%,transparent); }
+.mixer-channel.is-saving { box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 14%,transparent); }
 .master-channel { min-height:96px; border-color:color-mix(in srgb,var(--accent) 24%,transparent); }
 .channel-heading { min-width:0; display:grid; grid-template-columns:1fr auto; grid-template-rows:auto auto; column-gap:10px; }
 .channel-heading strong { min-width:0; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

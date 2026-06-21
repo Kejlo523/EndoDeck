@@ -42,6 +42,30 @@ function renderCompatibility(device) {
   ].map((item) => `<li>${item}</li>`).join("");
 }
 
+function screenOffReason(reason) {
+  return ({
+    "display-off": "ekran fizycznie zgasł",
+    "display-on": "ekran nadal świeci",
+    "root-permission": "root/Magisk odmówił uprawnień",
+    timeout: "komenda root przekroczyła timeout",
+    unknown: "brak jednoznacznego wyniku"
+  })[reason] || reason || "brak wyniku";
+}
+
+function renderScreenOffResult(result) {
+  const summary = result?.summary || {};
+  const lines = [
+    `${result?.ok ? "OK" : "BŁĄD"} · ${screenOffReason(summary.reason)}`,
+    `Telefon: ${result?.serial || diagnosis?.serial || "---"}`,
+    `Stan ekranu po teście: ${summary.screen || "unknown"}`,
+    `Trace exit: ${result?.trace?.exitCode ?? (result?.trace?.ok ? 0 : "---")}`,
+    `Wake exit: ${result?.wake?.exitCode ?? (result?.wake?.ok ? 0 : "---")}`
+  ];
+  if (result?.trace?.stderr) lines.push(`stderr: ${result.trace.stderr.slice(0, 240)}`);
+  if (result?.traceLog?.stdout) lines.push("", result.traceLog.stdout.split(/\r?\n/).slice(-12).join("\n"));
+  return lines.join("\n");
+}
+
 function render(device) {
   diagnosis = device;
   setChecking(false);
@@ -80,6 +104,8 @@ function render(device) {
   $("#install-apk").textContent = installed ? "ODŚWIEŻ APK" : "INSTALUJ APK";
   $("#install").disabled = !device.supported;
   $("#install").textContent = rebootReady ? "URUCHOM TELEFON" : "INSTALUJ MAGISK";
+  $("#screen-off-test").disabled = !(device.connected && device.root && device.magiskCompatible);
+  $("#screen-diagnostics").classList.toggle("hidden", !device.connected);
 
   const blockers = device.errors || [];
   $("#profile-blocker").textContent = blockers.length ? `Pełny profil Magisk jest jeszcze zablokowany: ${blockers.join(" · ")}` : "";
@@ -113,6 +139,8 @@ function renderRuntimeState(state) {
   setStep("#step-profile", "", "Zostanie dobrany automatycznie.");
   $("#install-apk").disabled = true;
   $("#install").disabled = true;
+  $("#screen-off-test").disabled = true;
+  $("#screen-diagnostics").classList.toggle("hidden", !state.adb);
   setStudioReady(false);
 }
 
@@ -176,8 +204,31 @@ $("#install").addEventListener("click", async () => {
   }
 });
 
+$("#screen-off-test").addEventListener("click", async () => {
+  if (!diagnosis?.serial) return;
+  const button = $("#screen-off-test");
+  const output = $("#screen-diagnostics-output");
+  button.disabled = true;
+  button.textContent = "TESTUJĘ...";
+  $("#screen-diagnostics").classList.remove("hidden");
+  output.textContent = "Zbieram baseline, próbuję screen-off --trace i przywracam wake...";
+  try {
+    const result = await api.screenOffDiagnostics(diagnosis.serial);
+    console.log("EndoDeck screen-off diagnostics", result);
+    output.textContent = renderScreenOffResult(result);
+    notify(result.ok ? "Screen-off działa: ekran fizycznie zgasł i telefon został obudzony." : `Screen-off wymaga poprawki: ${screenOffReason(result.summary?.reason)}.`, !result.ok);
+  } catch (error) {
+    output.textContent = error.message;
+    notify(error.message, true);
+  } finally {
+    button.disabled = !(diagnosis?.connected && diagnosis?.root && diagnosis?.magiskCompatible);
+    button.textContent = "DIAGNOSTYKA SCREEN-OFF";
+  }
+});
+
 $("#studio").addEventListener("click", () => api.openStudio());
 $("#data").addEventListener("click", () => api.openData());
+$("#artifacts").addEventListener("click", () => api.openArtifacts());
 $("#restart-server").addEventListener("click", async () => {
   const button = $("#restart-server");
   button.disabled = true;

@@ -24,6 +24,7 @@ function migrate(config) {
     screensaverAfterSeconds: 300,
     showNowPlaying: true,
     showEqualizer: true,
+    motion: { mode: "adaptive", activeSeconds: 45, ecoAfterSeconds: 90, hideAnalogSecondInEco: true, freezeEqualizerInEco: true },
     screensaverBrightness: { night: 6, twilight: 9, day: 13, offlineNight: 5, offlineDay: 10 },
     nightStandby: { enabled: true, start: "00:00", end: "07:00" },
     ...(next.ui ?? {})

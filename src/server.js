@@ -241,8 +241,12 @@ export async function startServer({ onReady, onState, version } = {}) {
           const result = await executeAction(button.action, {});
           state.lastAction = button.id;
           state.error = null;
-          state.controls = await getControlStates(config).catch(() => state.controls);
           publish();
+          getControlStates(config).then((controls) => {
+            if (JSON.stringify(controls) === JSON.stringify(state.controls)) return;
+            state.controls = controls;
+            publish();
+          }).catch(() => {});
           return sendJson(response, 200, { ok: true, ...result });
         } catch (error) {
           state.error = error.message;

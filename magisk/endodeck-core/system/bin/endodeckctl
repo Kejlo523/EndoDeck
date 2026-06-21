@@ -3,23 +3,111 @@
 STATE_DIR=/data/adb/endodeck
 OPTIONS="$STATE_DIR/options.conf"
 NIGHT_MARKER=/data/local/tmp/endodeck-night-standby
+TRACE_LOG=/data/local/tmp/endodeck-screen-off-trace.log
 DECK_COMPONENT=pl.endozero.endodeck/.MainActivity
+TRACE=0
 
 [ -f "$OPTIONS" ] && . "$OPTIONS"
 : "${ENABLE_LOCKSCREEN_BYPASS:=0}"
 : "${KEEP_WIFI_FOR_WEATHER:=1}"
 
+timestamp() {
+    date '+%F %T'
+}
+
+trace_start() {
+    TRACE=1
+    mkdir -p "$(dirname "$TRACE_LOG")" 2>/dev/null
+    printf '\n--- %s endodeckctl %s ---\n' "$(timestamp)" "$*" >> "$TRACE_LOG"
+}
+
+trace_line() {
+    [ "$TRACE" = "1" ] || return 0
+    printf '%s %s\n' "$(timestamp)" "$*" >> "$TRACE_LOG"
+}
+
+run_step() {
+    label=$1
+    timeout=$2
+    shift 2
+    command=$*
+    if [ "$TRACE" != "1" ]; then
+        sh -c "$command" >/dev/null 2>&1
+        return $?
+    fi
+
+    out="/data/local/tmp/endodeck-step-$$.out"
+    err="/data/local/tmp/endodeck-step-$$.err"
+    rm -f "$out" "$err"
+    trace_line "step start: $label"
+    sh -c "$command" >"$out" 2>"$err" &
+    pid=$!
+    left=$timeout
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ "$left" -le 0 ]; then
+            kill "$pid" 2>/dev/null
+            sleep 1
+            kill -9 "$pid" 2>/dev/null
+            wait "$pid" 2>/dev/null
+            trace_line "step timeout: $label after ${timeout}s"
+            [ -s "$out" ] && sed 's/^/stdout: /' "$out" >> "$TRACE_LOG"
+            [ -s "$err" ] && sed 's/^/stderr: /' "$err" >> "$TRACE_LOG"
+            rm -f "$out" "$err"
+            return 124
+        fi
+        sleep 1
+        left=$((left - 1))
+    done
+    wait "$pid"
+    code=$?
+    trace_line "step end: $label exit=$code"
+    [ -s "$out" ] && sed 's/^/stdout: /' "$out" >> "$TRACE_LOG"
+    [ -s "$err" ] && sed 's/^/stderr: /' "$err" >> "$TRACE_LOG"
+    rm -f "$out" "$err"
+    return "$code"
+}
+
+diag_dump() {
+    {
+        echo "== endodeckctl diag $(timestamp) =="
+        echo "uid=$(id 2>&1)"
+        echo "sdk=$(getprop ro.build.version.sdk)"
+        echo "manufacturer=$(getprop ro.product.manufacturer)"
+        echo "model=$(getprop ro.product.model)"
+        echo "magisk=$(magisk -v 2>&1)"
+        echo "night_marker=$([ -f "$NIGHT_MARKER" ] && echo 1 || echo 0)"
+        echo "stay_on_while_plugged_in=$(settings get global stay_on_while_plugged_in 2>&1)"
+        echo "screen_off_timeout=$(settings get system screen_off_timeout 2>&1)"
+        echo "lockscreen.disabled=$(settings get secure lockscreen.disabled 2>&1)"
+        echo "airplane_mode_on=$(settings get global airplane_mode_on 2>&1)"
+        echo "-- dumpsys power --"
+        dumpsys power 2>&1 | grep -E 'Display Power|mWakefulness|mInteractive|mScreenOn|mHoldingDisplay|mStayOn|WakeLock|SuspendBlocker|mUserActivityTimeoutOverrideFromWindowManager' | head -n 80
+        echo "-- dumpsys display --"
+        dumpsys display 2>&1 | grep -E 'mState=|state=|Display State|mScreenState|mBrightness|DisplayDeviceInfo' | head -n 80
+        echo "-- dumpsys window --"
+        dumpsys window 2>&1 | grep -E 'mCurrentFocus|mFocusedApp|mAwake|mScreenOn|mShowingLockscreen|mDreamingLockscreen|Keyguard|mKeyguard' | head -n 80
+    }
+}
+
+trace_diag() {
+    [ "$TRACE" = "1" ] || return 0
+    diag_dump | sed 's/^/diag: /' >> "$TRACE_LOG"
+}
+
 wake_screen() {
-    input keyevent 224
+    run_step "wake KEYCODE_WAKEUP" 4 "input keyevent 224"
     sleep 1
-    if dumpsys power 2>/dev/null | grep -q 'mWakefulness=Asleep'; then input keyevent 26; fi
+    if dumpsys power 2>/dev/null | grep -q 'mWakefulness=Asleep'; then
+        run_step "wake KEYCODE_POWER fallback" 4 "input keyevent 26"
+    fi
 }
 
 screen_is_on() {
     power_state=$(dumpsys power 2>/dev/null)
     display_state=$(dumpsys display 2>/dev/null)
-    echo "$power_state" | grep -qE 'mWakefulness=Awake|mWakefulness=Dreaming|mInteractive=true|mScreenOn=true|Display Power: state=ON' && return 0
+    echo "$power_state" | grep -qE 'Display Power: state=OFF|mScreenOn=false' && return 1
     echo "$display_state" | grep -qE 'mState=ON|mState=DOZE|state=ON|state=DOZE|Display State: ON|Display State: DOZE|mScreenState=ON' && return 0
+    echo "$power_state" | grep -qE 'mWakefulness=Awake|mWakefulness=Dreaming|mInteractive=true|mScreenOn=true|Display Power: state=ON' && return 0
     return 1
 }
 
@@ -28,75 +116,121 @@ screen_state_json() {
 }
 
 screen_off() {
-    settings put system screen_off_timeout 1000
-    input keyevent 223 >/dev/null 2>&1 || input keyevent KEYCODE_SLEEP >/dev/null 2>&1
+    trace_line "screen-off requested"
+    trace_diag
+    run_step "set screen timeout 1000" 4 "settings put system screen_off_timeout 1000"
+    run_step "KEYCODE_SLEEP 223" 4 "input keyevent 223"
     sleep 1
-    if ! screen_is_on; then return 0; fi
-    input keyevent 26 >/dev/null 2>&1 || input keyevent KEYCODE_POWER >/dev/null 2>&1
-    sleep 1
-    if ! screen_is_on; then return 0; fi
-    input keyevent 223 >/dev/null 2>&1 || input keyevent KEYCODE_SLEEP >/dev/null 2>&1
-    sleep 1
-    if ! screen_is_on; then return 0; fi
-    if screen_is_on; then
-        input keyevent 26 >/dev/null 2>&1 || input keyevent KEYCODE_POWER >/dev/null 2>&1
-        sleep 1
+    if ! screen_is_on; then
+        trace_line "screen-off success after KEYCODE_SLEEP"
+        trace_diag
+        return 0
     fi
-    screen_is_on && return 1
+
+    run_step "KEYCODE_POWER fallback" 4 "input keyevent 26"
+    sleep 1
+    if ! screen_is_on; then
+        trace_line "screen-off success after KEYCODE_POWER"
+        trace_diag
+        return 0
+    fi
+
+    run_step "KEYCODE_SLEEP retry" 4 "input keyevent 223"
+    sleep 1
+    if ! screen_is_on; then
+        trace_line "screen-off success after retry"
+        trace_diag
+        return 0
+    fi
+
+    run_step "KEYCODE_POWER final" 4 "input keyevent 26"
+    sleep 1
+    if screen_is_on; then
+        trace_line "screen-off failed: screen still on"
+        trace_diag
+        return 1
+    fi
+    trace_line "screen-off success after final fallback"
+    trace_diag
     return 0
+}
+
+optional_deviceidle_force() {
+    run_step "deviceidle force-idle optional" 8 "dumpsys deviceidle force-idle"
+    code=$?
+    [ "$code" = "0" ] || trace_line "optional deviceidle failed exit=$code"
+    return 0
+}
+
+night_sleep() {
+    touch "$NIGHT_MARKER"
+    run_step "disable stay_on_while_plugged_in" 4 "settings put global stay_on_while_plugged_in 0"
+    run_step "disable power stayon" 4 "svc power stayon false"
+    run_step "set night timeout" 4 "settings put system screen_off_timeout 15000"
+    run_step "enable airplane mode setting" 4 "settings put global airplane_mode_on 1"
+    run_step "broadcast airplane mode" 6 "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true"
+    run_step "disable data" 5 "svc data disable"
+    run_step "disable wifi" 8 "svc wifi disable"
+    run_step "force-stop deck" 6 "am force-stop pl.endozero.endodeck"
+    screen_off
+    result=$?
+    optional_deviceidle_force
+    printf '{"screen":"%s","ok":%s}\n' "$(screen_state_json)" "$([ "$result" = "0" ] && echo true || echo false)"
+    return "$result"
 }
 
 case "$1" in
     wake)
         rm -f "$NIGHT_MARKER"
-        dumpsys deviceidle unforce >/dev/null 2>&1
-        settings put global stay_on_while_plugged_in 2
-        svc power stayon usb >/dev/null 2>&1
-        settings put system screen_off_timeout 1800000
-        settings put global airplane_mode_on 1
-        am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true >/dev/null 2>&1
-        svc data disable >/dev/null 2>&1
-        if [ "$KEEP_WIFI_FOR_WEATHER" = "1" ]; then svc wifi enable; else svc wifi disable; fi
+        run_step "deviceidle unforce" 8 "dumpsys deviceidle unforce"
+        run_step "restore stay_on_while_plugged_in" 4 "settings put global stay_on_while_plugged_in 2"
+        run_step "enable power stayon usb" 4 "svc power stayon usb"
+        run_step "restore screen timeout" 4 "settings put system screen_off_timeout 1800000"
+        run_step "enable airplane mode setting" 4 "settings put global airplane_mode_on 1"
+        run_step "broadcast airplane mode" 6 "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true"
+        run_step "disable data" 5 "svc data disable"
+        if [ "$KEEP_WIFI_FOR_WEATHER" = "1" ]; then run_step "enable wifi" 8 "svc wifi enable"; else run_step "disable wifi" 8 "svc wifi disable"; fi
         wake_screen
         if [ "$ENABLE_LOCKSCREEN_BYPASS" = "1" ]; then
-            settings put secure lockscreen.disabled 1
-            locksettings set-disabled true >/dev/null 2>&1
-            wm dismiss-keyguard >/dev/null 2>&1
+            run_step "disable lockscreen setting" 5 "settings put secure lockscreen.disabled 1"
+            run_step "disable locksettings" 8 "locksettings set-disabled true"
+            run_step "dismiss keyguard" 5 "wm dismiss-keyguard"
         fi
-        am start -n "$DECK_COMPONENT" >/dev/null 2>&1
+        run_step "start deck" 8 "am start -n $DECK_COMPONENT"
         ;;
     sleep-night)
-        touch "$NIGHT_MARKER"
-        settings put global stay_on_while_plugged_in 0
-        svc power stayon false >/dev/null 2>&1
-        settings put system screen_off_timeout 15000
-        settings put global airplane_mode_on 1
-        am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true >/dev/null 2>&1
-        svc data disable >/dev/null 2>&1
-        svc wifi disable >/dev/null 2>&1
-        am force-stop pl.endozero.endodeck >/dev/null 2>&1
-        screen_off
-        dumpsys deviceidle force-idle >/dev/null 2>&1
+        if [ "$2" = "--trace" ]; then trace_start "$@"; fi
+        night_sleep
+        exit $?
         ;;
     screen-off)
+        if [ "$2" = "--trace" ]; then trace_start "$@"; fi
         screen_off
+        result=$?
+        printf '{"screen":"%s","ok":%s}\n' "$(screen_state_json)" "$([ "$result" = "0" ] && echo true || echo false)"
+        exit "$result"
         ;;
     sleep)
-        settings put global stay_on_while_plugged_in 0
-        svc power stayon false >/dev/null 2>&1
-        svc data disable >/dev/null 2>&1
-        svc wifi disable >/dev/null 2>&1
+        run_step "disable stay_on_while_plugged_in" 4 "settings put global stay_on_while_plugged_in 0"
+        run_step "disable power stayon" 4 "svc power stayon false"
+        run_step "disable data" 5 "svc data disable"
+        run_step "disable wifi" 8 "svc wifi disable"
         screen_off
-        dumpsys deviceidle force-idle >/dev/null 2>&1
+        result=$?
+        optional_deviceidle_force
+        exit "$result"
         ;;
     restore)
         rm -f "$NIGHT_MARKER"
-        dumpsys deviceidle unforce >/dev/null 2>&1
-        settings put global airplane_mode_on 0
-        am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false >/dev/null 2>&1
-        svc wifi enable >/dev/null 2>&1
-        settings put secure lockscreen.disabled 0
-        locksettings set-disabled false >/dev/null 2>&1
+        run_step "deviceidle unforce" 8 "dumpsys deviceidle unforce"
+        run_step "disable airplane mode setting" 4 "settings put global airplane_mode_on 0"
+        run_step "broadcast airplane mode off" 6 "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false"
+        run_step "enable wifi" 8 "svc wifi enable"
+        run_step "restore lockscreen setting" 5 "settings put secure lockscreen.disabled 0"
+        run_step "restore locksettings" 8 "locksettings set-disabled false"
+        ;;
+    diag)
+        diag_dump
         ;;
     status)
         usb=$(cat /sys/class/android_usb/android0/state 2>/dev/null)
@@ -105,7 +239,7 @@ case "$1" in
         printf '{"usb":"%s","night":%s,"screen":"%s","sdk":%s}\n' "$usb" "$night" "$(screen_state_json)" "$(getprop ro.build.version.sdk)"
         ;;
     *)
-        echo "usage: endodeckctl status|wake|sleep|sleep-night|screen-off|restore" >&2
+        echo "usage: endodeckctl status|diag|wake|sleep|sleep-night [--trace]|screen-off [--trace]|restore" >&2
         exit 2
         ;;
 esac

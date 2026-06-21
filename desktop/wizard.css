@@ -44,6 +44,7 @@ button:disabled { cursor: default; opacity: .54; }
 .phone-app,
 .options,
 .compat-card,
+.diagnostics,
 .action-dock,
 .profile-blocker {
   border: 1px solid var(--line);
@@ -259,7 +260,8 @@ h1 {
 
 .phone-app,
 .compat-card,
-.options {
+.options,
+.diagnostics {
   padding: 12px;
   animation: panelIn .18s ease both;
 }
@@ -268,6 +270,29 @@ h1 {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 11px;
+}
+
+.diagnostics {
+  display: grid;
+  gap: 8px;
+}
+
+.diagnostics h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.diagnostics pre {
+  margin: 0;
+  max-height: 150px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #aeb8aa;
+  background: #090b09;
+  font: 10px/1.45 Consolas, monospace;
+  white-space: pre-wrap;
 }
 
 .options {

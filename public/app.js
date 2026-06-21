@@ -28,10 +28,54 @@ let screensaverTimer;
 let burnInTimer;
 let screensaverActive = false;
 let screensaverMediaVisible = false;
+let lastScreensaverStateUpdateAt = 0;
+let powerConstrainedDevice;
+let lastScreensaverTrackKey = "";
+let screensaverShownAt = 0;
+let lastMotionActivityAt = 0;
 let latestWeather;
 let suppressDeckClickUntil = 0;
 let lastShownError = null;
 const nowPlayingAnimationTimers = new WeakMap();
+const actionQueues = new Map();
+let mixerFreezeUntil = 0;
+
+function isPowerConstrainedDevice() {
+  if (powerConstrainedDevice !== undefined) return powerConstrainedDevice;
+  try {
+    if (window.NativeDeck?.isPowerConstrainedDevice?.() === true) {
+      powerConstrainedDevice = true;
+      return powerConstrainedDevice;
+    }
+  } catch { }
+  powerConstrainedDevice = /Android\s+7|Android\/7/i.test(navigator.userAgent || "");
+  return powerConstrainedDevice;
+}
+
+function trackKey(state = latestState) {
+  const track = state.nowPlaying ?? {};
+  return track.playing && track.title ? `${track.title}\n${track.artist || ""}` : "";
+}
+
+function motionConfig() {
+  return getDisplayConfig(config).motion ?? { mode: "adaptive", activeSeconds: 45, ecoAfterSeconds: 90 };
+}
+
+function markMotionActivity() {
+  lastMotionActivityAt = Date.now();
+}
+
+function currentMotionState() {
+  const motion = motionConfig();
+  if (motion.mode === "full") return "full";
+  if (motion.mode === "eco") return "eco";
+  if (!isPowerConstrainedDevice()) return "full";
+  const now = Date.now();
+  const activeMs = Math.max(5, Number(motion.activeSeconds) || 45) * 1000;
+  const ecoMs = Math.max(10, Number(motion.ecoAfterSeconds) || 90) * 1000;
+  const reference = Math.max(screensaverShownAt || 0, lastMotionActivityAt || 0);
+  return reference && now - reference < Math.max(activeMs, ecoMs) ? "full" : "eco";
+}
 
 function showToast(message, error = false) {
   clearTimeout(toastTimer);
@@ -54,10 +98,105 @@ function controlActive(id) {
 function applyControlStates() {
   for (const element of document.querySelectorAll(".deck-button[data-id]")) {
     const active = controlActive(element.dataset.id);
+    const pending = actionQueues.has(element.dataset.id);
     element.classList.toggle("is-on", active);
+    element.classList.toggle("is-pending", pending);
     element.setAttribute("aria-pressed", String(active));
     const badge = element.querySelector(".live-badge");
-    if (badge) badge.textContent = active ? "AKTYWNE" : "";
+    if (badge) badge.textContent = pending ? "WYSYŁAM" : active ? "AKTYWNE" : "";
+  }
+}
+
+function pointInside(element, event) {
+  const bounds = element.getBoundingClientRect();
+  return event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+}
+
+function bindFastActivation(element, callback) {
+  let activePointer = null;
+  let lastPointerActivation = 0;
+  element.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    activePointer = event.pointerId;
+    element.setPointerCapture?.(event.pointerId);
+    element.classList.add("pressed");
+  });
+  element.addEventListener("pointerup", (event) => {
+    if (activePointer !== event.pointerId) return;
+    activePointer = null;
+    element.releasePointerCapture?.(event.pointerId);
+    element.classList.remove("pressed");
+    if (!pointInside(element, event)) return;
+    lastPointerActivation = Date.now();
+    event.preventDefault();
+    callback(event);
+  });
+  element.addEventListener("pointerleave", () => element.classList.remove("pressed"));
+  element.addEventListener("pointercancel", (event) => {
+    if (activePointer === event.pointerId) activePointer = null;
+    element.classList.remove("pressed");
+  });
+  element.addEventListener("click", (event) => {
+    if (Date.now() - lastPointerActivation < 650) {
+      event.preventDefault();
+      return;
+    }
+    callback(event);
+  });
+  element.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    element.classList.add("pressed");
+    setTimeout(() => element.classList.remove("pressed"), 90);
+    callback(event);
+  });
+}
+
+function maxQueuedActions(button) {
+  return ["media", "hotkey", "globalHotkey"].includes(button.action?.type) ? 3 : 1;
+}
+
+function setButtonBusy(id, busy) {
+  for (const element of document.querySelectorAll(".deck-button[data-id]")) {
+    if (element.dataset.id !== id) continue;
+    element.classList.toggle("is-pending", busy);
+    const badge = element.querySelector(".live-badge");
+    if (badge && busy) badge.textContent = "WYSYŁAM";
+    if (badge && !busy) badge.textContent = controlActive(id) ? "AKTYWNE" : "";
+  }
+}
+
+function activateButton(button, element) {
+  if (Date.now() < suppressDeckClickUntil) return;
+  if (button.action?.type === "page") {
+    navigator.vibrate?.(10);
+    render(button.action.page);
+    return;
+  }
+  const id = button.id;
+  const existing = actionQueues.get(id);
+  if (existing) {
+    existing.queued = Math.min(maxQueuedActions(button), existing.queued + 1);
+    element.classList.add("is-queued");
+    navigator.vibrate?.(8);
+    return;
+  }
+  const queue = { queued: 0 };
+  actionQueues.set(id, queue);
+  setButtonBusy(id, true);
+  runActionQueue(button, element, queue);
+}
+
+async function runActionQueue(button, element, queue) {
+  try {
+    do {
+      queue.queued = Math.max(0, queue.queued - 1);
+      await trigger(button, element);
+    } while (queue.queued > 0);
+  } finally {
+    actionQueues.delete(button.id);
+    element.classList.remove("is-queued");
+    setButtonBusy(button.id, false);
   }
 }
 
@@ -68,11 +207,7 @@ function createDeckButton(button) {
   element.style.setProperty("--enter-delay", `${Math.min(11, Math.max(0, Number(button.position ?? 1) - 1)) * 24}ms`);
   element.setAttribute("aria-label", `${button.label} ${button.hint ?? ""}`.trim());
   element.innerHTML = `<span class="tile-number">${String(button.position ?? "").padStart(2, "0")}</span><span class="live-badge"></span><span class="icon">${iconSvg(button.icon)}</span><span class="tile-copy"><strong>${button.label}</strong><small>${button.hint ?? ""}</small></span>`;
-  element.addEventListener("pointerdown", () => element.classList.add("pressed"));
-  element.addEventListener("pointerup", () => element.classList.remove("pressed"));
-  element.addEventListener("pointerleave", () => element.classList.remove("pressed"));
-  element.addEventListener("pointercancel", () => element.classList.remove("pressed"));
-  element.addEventListener("click", () => trigger(button, element));
+  bindFastActivation(element, () => activateButton(button, element));
   return element;
 }
 
@@ -104,26 +239,50 @@ function createRangeChannel({ id, name, process, volume, master = false }) {
   range.type = "range"; range.min = "0"; range.max = "100"; range.value = String(volume);
   range.style.setProperty("--level", `${volume}%`);
   range.setAttribute("aria-label", `Głośność ${name}`);
-  range.addEventListener("input", () => { channel.querySelector("output").textContent = `${range.value}%`; range.style.setProperty("--level", `${range.value}%`); });
-  range.addEventListener("change", () => updateVolume(master ? "master" : "session", id, Number(range.value)));
+  const freeze = (ms = 2200) => { mixerFreezeUntil = Math.max(mixerFreezeUntil, Date.now() + ms); };
+  const syncLocal = () => {
+    channel.classList.add("is-editing");
+    channel.querySelector("output").textContent = `${range.value}%`;
+    range.style.setProperty("--level", `${range.value}%`);
+  };
+  range.addEventListener("pointerdown", () => freeze(3500));
+  range.addEventListener("touchstart", () => freeze(3500), { passive: true });
+  range.addEventListener("input", () => { freeze(3500); syncLocal(); });
+  range.addEventListener("change", () => {
+    freeze(4500);
+    syncLocal();
+    updateVolume(master ? "master" : "session", id, Number(range.value), channel);
+  });
   channel.append(range);
   return channel;
 }
 
-async function updateVolume(target, id, volume) {
+async function updateVolume(target, id, volume, channel) {
   try {
+    channel?.classList.add("is-saving");
     const response = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target, id, volume }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Nie udało się zmienić głośności");
+    mixerFreezeUntil = Math.max(mixerFreezeUntil, Date.now() + 1600);
     navigator.vibrate?.(12);
-  } catch (error) { showErrorOnce(error.message); }
+    setTimeout(() => {
+      channel?.classList.remove("is-editing", "is-saving");
+      const board = document.querySelector(".mixer-board");
+      if (board && currentPage === "audio" && Date.now() >= mixerFreezeUntil) loadMixer(board);
+    }, 800);
+  } catch (error) {
+    channel?.classList.remove("is-editing", "is-saving");
+    showErrorOnce(error.message);
+  }
 }
 
 async function loadMixer(board) {
+  if (Date.now() < mixerFreezeUntil) return;
   try {
     const response = await fetch("/api/audio", { cache: "no-store" });
     const snapshot = await response.json();
     if (!response.ok) throw new Error(snapshot.error || "Mikser Windows jest niedostępny");
+    if (Date.now() < mixerFreezeUntil) return;
     if (!board.isConnected || currentPage !== "audio") return;
     const channels = document.createElement("div");
     channels.className = "mixer-channels";
@@ -138,13 +297,10 @@ function createSourceTile(button) {
   element.className = `deck-button tone-${button.tone ?? "neutral"} source-tile`;
   element.dataset.id = button.id;
   element.setAttribute("role", "button");
+  element.tabIndex = 0;
   element.setAttribute("aria-label", `${button.label} ${button.hint ?? ""}`.trim());
   element.innerHTML = `<span class="tile-number">${String(button.position ?? "").padStart(2, "0")}</span><span class="icon">${iconSvg(button.icon)}</span><span class="tile-copy"><strong>${button.label}</strong><small>${button.hint ?? ""}</small></span>`;
-  element.addEventListener("pointerdown", () => element.classList.add("pressed"));
-  element.addEventListener("pointerup", () => element.classList.remove("pressed"));
-  element.addEventListener("pointerleave", () => element.classList.remove("pressed"));
-  element.addEventListener("pointercancel", () => element.classList.remove("pressed"));
-  element.addEventListener("click", () => {
+  bindFastActivation(element, () => {
     navigator.vibrate?.(12);
     openSourceDialog();
   });
@@ -226,12 +382,12 @@ function renderMixer(page) {
   loadMixer(board);
   applyControlStates();
   audioRefreshTimer = setInterval(() => {
-    if (!document.querySelector(".mixer-range:active")) loadMixer(board);
+    if (screensaverActive || document.hidden) return;
+    if (Date.now() >= mixerFreezeUntil && !document.querySelector(".mixer-channel.is-editing")) loadMixer(board);
   }, 7000);
 }
 
 async function trigger(button, element) {
-  if (button.action.type === "page") return render(button.action.page);
   navigator.vibrate?.(24);
   try {
     const response = await fetch("/api/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: button.id }) });
@@ -335,7 +491,7 @@ function renderNowPlaying() {
   }
 
   syncEqualizerActivity();
-  updateScreensaverLive();
+  updateScreensaverLive({ force: trackKey() !== lastScreensaverTrackKey });
   if (!hasTrack) return;
 
   $("#now-playing-title").textContent = track.title;
@@ -347,12 +503,16 @@ function renderNowPlaying() {
 
 function updateState(state) {
   latestState = state;
-  $("#usb-status").classList.toggle("online", Boolean(state.adb));
-  const battery = state.battery;
-  $("#power-status").textContent = battery ? `${battery.currentMa >= 0 ? "+" : ""}${battery.currentMa} mA` : "-- mA";
-  $("#battery-status").textContent = battery ? `${battery.percent}%` : "--%";
-  applyControlStates();
-  renderNowPlaying();
+  if (screensaverActive) {
+    updateScreensaverLive();
+  } else {
+    $("#usb-status").classList.toggle("online", Boolean(state.adb));
+    const battery = state.battery;
+    $("#power-status").textContent = battery ? `${battery.currentMa >= 0 ? "+" : ""}${battery.currentMa} mA` : "-- mA";
+    $("#battery-status").textContent = battery ? `${battery.percent}%` : "--%";
+    applyControlStates();
+    renderNowPlaying();
+  }
   if (state.error) showErrorOnce(state.error);
   else lastShownError = null;
 }
@@ -417,7 +577,7 @@ function updateClock() {
   const now = new Date();
   const main = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(now);
   $("#clock").textContent = main;
-  if (screensaverActive) updateScreensaverDynamic(screensaver, { now });
+  if (screensaverActive) updateScreensaverDynamic(screensaver, { config, now, optimizeAnimations: isPowerConstrainedDevice(), motionState: currentMotionState(), clockOnly: true });
 }
 
 const weatherLabels = { 0:["SŁONECZNIE","☀"],1:["PRAWIE BEZCHMURNIE","◒"],2:["CZĘŚCIOWE ZACHMURZENIE","◑"],3:["POCHMURNO","☁"],45:["MGŁA","≋"],48:["SZADŹ","≋"],51:["MŻAWKA","⋰"],53:["MŻAWKA","⋰"],55:["MŻAWKA","⋰"],61:["DESZCZ","↯"],63:["DESZCZ","↯"],65:["ULEWA","↯"],71:["ŚNIEG","✦"],73:["ŚNIEG","✦"],75:["ŚNIEŻYCA","✦"],80:["PRZELOTNY DESZCZ","↯"],81:["PRZELOTNY DESZCZ","↯"],82:["ULEWA","↯"],95:["BURZA","ϟ"],96:["BURZA Z GRADEM","ϟ"],99:["BURZA Z GRADEM","ϟ"] };
@@ -499,13 +659,16 @@ function rotateScreensaver() {
 function refreshScreensaver() {
   if (!screensaverActive || !config) return;
   screensaverMediaVisible = screensaverHasMedia();
+  lastScreensaverTrackKey = trackKey();
   renderScreensaver(screensaver, activeScreensaver(config), {
     config,
     state: latestState,
     weather: latestWeather,
     accent: config.accent,
-    now: new Date()
-  });
+    now: new Date(),
+    optimizeAnimations: isPowerConstrainedDevice(),
+    motionState: currentMotionState()
+  }, { optimizeAnimations: isPowerConstrainedDevice(), motionState: currentMotionState() });
 }
 
 function updateScreensaverLive(extra = {}) {
@@ -515,18 +678,31 @@ function updateScreensaverLive(extra = {}) {
     refreshScreensaver();
     return;
   }
+  const now = Date.now();
+  const currentTrackKey = trackKey();
+  const trackChanged = currentTrackKey !== lastScreensaverTrackKey;
+  if (trackChanged) markMotionActivity();
+  const includeState = !isPowerConstrainedDevice() || extra.force === true || trackChanged || now - lastScreensaverStateUpdateAt > 5000;
+  if (!includeState && !extra.clockOnly) return;
+  if (includeState) lastScreensaverStateUpdateAt = now;
+  lastScreensaverTrackKey = currentTrackKey;
   updateScreensaverDynamic(screensaver, {
     config,
-    state: latestState,
+    ...(includeState ? { state: latestState } : {}),
     weather: latestWeather,
     accent: config.accent,
     now: new Date(),
+    optimizeAnimations: isPowerConstrainedDevice(),
+    motionState: currentMotionState(),
     ...extra
   });
 }
 
 function showScreensaver() {
   screensaverActive = true;
+  screensaverShownAt = Date.now();
+  markMotionActivity();
+  lastScreensaverStateUpdateAt = 0;
   document.body.classList.remove("dimmed");
   refreshScreensaver();
   clearInterval(burnInTimer);
@@ -541,6 +717,7 @@ function resetIdle() {
   clearTimeout(inactivityTimer); clearTimeout(screensaverTimer); clearInterval(burnInTimer);
   if (screensaverActive) setDeckBrightness(-1);
   screensaverActive = false;
+  screensaverShownAt = 0;
   syncEqualizerActivity();
   document.body.classList.remove("dimmed"); screensaver.classList.add("hidden"); screensaver.setAttribute("aria-hidden", "true");
   const display = getDisplayConfig(config);

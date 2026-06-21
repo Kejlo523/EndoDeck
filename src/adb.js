@@ -49,6 +49,17 @@ function parseScheduleMinute(value, fallback) {
   return hour * 60 + minute;
 }
 
+export function parseScreenOffReport(text = "") {
+  const value = String(text || "");
+  const screenJson = value.match(/"screen"\s*:\s*"(on|off)"/i)?.[1]?.toLowerCase();
+  if (screenJson) return { screen: screenJson, ok: screenJson === "off", reason: screenJson === "off" ? "display-off" : "display-on" };
+  if (/Display Power:\s*state=OFF|mScreenOn=false/i.test(value)) return { screen: "off", ok: true, reason: "display-off" };
+  if (/permission denied|not allowed|uid=\d+/i.test(value) && !/uid=0/i.test(value)) return { screen: "unknown", ok: false, reason: "root-permission" };
+  if (/timed out|timeout|exit=124/i.test(value)) return { screen: "unknown", ok: false, reason: "timeout" };
+  if (/Display Power:\s*state=ON|mScreenOn=true|mInteractive=true/i.test(value)) return { screen: "on", ok: false, reason: "display-on" };
+  return { screen: "unknown", ok: false, reason: "unknown" };
+}
+
 function nightOptionLines(config = {}) {
   const nightStandby = config.ui?.display?.nightStandby ?? config.ui?.nightStandby ?? {};
   const startMinute = parseScheduleMinute(nightStandby.start, 0);
@@ -94,6 +105,23 @@ export class AdbBridge {
 
   async shell(serial, command, timeout = 8000) {
     return (await this.run(["-s", serial, "shell", command], timeout)).stdout.trim();
+  }
+
+  async safeShell(serial, command, timeout = 8000) {
+    try {
+      const result = await this.run(["-s", serial, "shell", command], timeout);
+      return { ok: true, command, stdout: result.stdout.trim(), stderr: result.stderr.trim(), exitCode: 0 };
+    } catch (error) {
+      return {
+        ok: false,
+        command,
+        stdout: String(error.stdout || "").trim(),
+        stderr: String(error.stderr || "").trim(),
+        exitCode: typeof error.code === "number" ? error.code : null,
+        signal: error.signal || null,
+        error: error.message
+      };
+    }
   }
 
   async diagnose(serial) {
@@ -215,6 +243,28 @@ export class AdbBridge {
 
   async syncRuntimeOptions(serial, config = null) {
     await this.writeOptionLines(serial, nightOptionLines(config ?? await this.getConfig().catch(() => ({}))));
+  }
+
+  async screenOffDiagnostics(serial) {
+    const selected = serial || (await this.listDevices()).find((device) => device.state === "device")?.serial;
+    if (!selected) throw new Error("Nie znaleziono autoryzowanego telefonu ADB");
+    const before = await this.safeShell(selected, "su -c '/system/bin/endodeckctl diag'", 15000);
+    const trace = await this.safeShell(selected, "su -c '/system/bin/endodeckctl screen-off --trace'", 35000);
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const after = await this.safeShell(selected, "su -c '/system/bin/endodeckctl status; /system/bin/endodeckctl diag'", 18000);
+    const traceLog = await this.safeShell(selected, "su -c 'tail -n 260 /data/local/tmp/endodeck-screen-off-trace.log'", 15000);
+    const wake = await this.safeShell(selected, "su -c '/system/bin/endodeckctl wake'", 30000);
+    const summary = parseScreenOffReport(`${trace.stdout}\n${trace.stderr}\n${after.stdout}\n${after.stderr}`);
+    return {
+      ok: summary.ok && trace.ok,
+      serial: selected,
+      summary,
+      before,
+      trace,
+      after,
+      traceLog,
+      wake
+    };
   }
 
   async installProfile(serial, options = {}) {

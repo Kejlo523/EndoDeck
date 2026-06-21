@@ -3,6 +3,7 @@ package pl.endozero.endodeck;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.content.Context;
@@ -20,6 +21,8 @@ import android.webkit.WebViewClient;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Calendar;
 import java.util.Iterator;
@@ -114,6 +117,13 @@ public final class MainActivity extends Activity {
         public String getOfflineBundle() {
             String value = secureStore.get("offline_bundle");
             return value.isEmpty() ? "{}" : value;
+        }
+
+        @JavascriptInterface
+        public boolean isPowerConstrainedDevice() {
+            String manufacturer = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase();
+            String model = Build.MODEL == null ? "" : Build.MODEL.toLowerCase();
+            return Build.VERSION.SDK_INT <= 25 || (manufacturer.contains("huawei") && model.contains("ale"));
         }
 
         @JavascriptInterface
@@ -285,16 +295,19 @@ public final class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(7, 9, 7));
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setAllowFileAccess(true);
         settings.setAllowFileAccessFromFileURLs(true);
         settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setTextZoom(100);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) settings.setOffscreenPreRaster(false);
         webView.addJavascriptInterface(new DeckBridge(), "NativeDeck");
 
         webView.setWebViewClient(new WebViewClient() {
@@ -479,7 +492,7 @@ public final class MainActivity extends Activity {
             webView.pauseTimers();
         }
         setWindowBrightness(0f);
-        runRootCommand("/system/bin/endodeckctl sleep-night");
+        runRootCommand("/system/bin/endodeckctl sleep-night --trace");
     }
 
     private void leaveNightStandby() {
@@ -496,13 +509,56 @@ public final class MainActivity extends Activity {
 
     private void runRootCommand(final String command) {
         new Thread(() -> {
+            Process process = null;
+            StringBuilder stdout = new StringBuilder();
+            StringBuilder stderr = new StringBuilder();
             try {
-                Process process = Runtime.getRuntime().exec(new String[] { "su", "-c", command });
-                process.waitFor();
+                process = Runtime.getRuntime().exec(new String[] { "su", "-c", command });
+                Thread stdoutReader = collectStream(process.getInputStream(), stdout);
+                Thread stderrReader = collectStream(process.getErrorStream(), stderr);
+                int exitCode = waitForProcess(process, 20_000L);
+                stdoutReader.join(500L);
+                stderrReader.join(500L);
+                android.util.Log.i("EndoDeckPower", "su -c '" + command + "' exit=" + exitCode
+                    + " stdout=" + truncateLog(stdout.toString())
+                    + " stderr=" + truncateLog(stderr.toString()));
             } catch (Exception error) {
                 android.util.Log.w("EndoDeckPower", "Root command failed", error);
+            } finally {
+                if (process != null) process.destroy();
             }
         }).start();
+    }
+
+    private Thread collectStream(final InputStream stream, final StringBuilder target) {
+        Thread thread = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (target.length() < 8000) target.append(line).append('\n');
+                }
+            } catch (Exception ignored) { }
+        });
+        thread.start();
+        return thread;
+    }
+
+    private int waitForProcess(Process process, long timeoutMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            try { return process.exitValue(); }
+            catch (IllegalThreadStateException ignored) { Thread.sleep(120L); }
+        }
+        process.destroy();
+        Thread.sleep(300L);
+        try { return process.exitValue(); }
+        catch (IllegalThreadStateException ignored) { return -124; }
+    }
+
+    private String truncateLog(String value) {
+        if (value == null || value.isEmpty()) return "";
+        String normalized = value.replace('\r', ' ').replace('\n', ' ').trim();
+        return normalized.length() > 1600 ? normalized.substring(0, 1600) + "..." : normalized;
     }
 
     private void showOffline() {
