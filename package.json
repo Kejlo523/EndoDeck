@@ -1,6 +1,6 @@
 {
   "name": "endodeck",
-  "version": "1.1.0-beta.11",
+  "version": "1.1.0-beta.12",
   "private": false,
   "description": "USB Stream Deck for a repurposed Android phone",
   "author": "Kejlo523",
@@ -92,7 +92,7 @@
     "nsis": {
       "artifactName": "EndoDeck-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
-      "perMachine": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,

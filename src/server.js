@@ -276,7 +276,19 @@ export async function startServer({ onReady, onState, version } = {}) {
   });
   adb.start();
 
-  const controlTimer = setInterval(async () => {
+  let controlTimer;
+  let statsTimer;
+  const controlPollMs = numberSetting(config.runtime?.controlPollMs, 2200);
+  const statsPollMs = numberSetting(config.runtime?.statsPollMs, 4000);
+
+  const scheduleControlPoll = (delay = controlPollMs) => {
+    if (!stopped) controlTimer = setTimeout(runControlPoll, delay);
+  };
+  const scheduleStatsPoll = (delay = statsPollMs) => {
+    if (!stopped) statsTimer = setTimeout(runStatsPoll, delay);
+  };
+
+  async function runControlPoll() {
     try {
       const [controls, nowPlaying] = await Promise.all([getControlStates(config), getNowPlaying().catch(() => state.nowPlaying)]);
       if (JSON.stringify(controls) !== JSON.stringify(state.controls) || JSON.stringify(nowPlaying) !== JSON.stringify(state.nowPlaying)) {
@@ -284,12 +296,20 @@ export async function startServer({ onReady, onState, version } = {}) {
         state.nowPlaying = nowPlaying;
         publish();
       }
-    } catch {}
-  }, numberSetting(config.runtime?.controlPollMs, 2200));
-  const statsTimer = setInterval(async () => {
+    } catch {
+    } finally {
+      scheduleControlPoll();
+    }
+  }
+
+  async function runStatsPoll() {
     state.systemStats = await getSystemStats().catch(() => state.systemStats);
     publish();
-  }, numberSetting(config.runtime?.statsPollMs, 4000));
+    scheduleStatsPoll();
+  }
+
+  scheduleControlPoll(0);
+  scheduleStatsPoll(0);
 
   const runtime = {
     port: config.port,
@@ -301,8 +321,8 @@ export async function startServer({ onReady, onState, version } = {}) {
     async stop() {
       if (stopped) return;
       stopped = true;
-      clearInterval(controlTimer);
-      clearInterval(statsTimer);
+      clearTimeout(controlTimer);
+      clearTimeout(statsTimer);
       adb.stop();
       for (const client of clients) client.end();
       clients.clear();

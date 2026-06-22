@@ -58,7 +58,7 @@ public final class MainActivity extends Activity {
         @Override
         public void run() {
             if (isNightHours()) {
-                if (!deckVisible) enterNightStandby();
+                enterNightStandby(true);
             } else if (nightStandby) {
                 leaveNightStandby();
             }
@@ -257,11 +257,11 @@ public final class MainActivity extends Activity {
                 final boolean serverAvailable = available;
                 handler.post(() -> {
                     if (destroyed || isFinishing()) return;
-                    if (serverAvailable) {
+                    if (isNightHours()) {
+                        enterNightStandby(true);
+                    } else if (serverAvailable) {
                         if (nightStandby) leaveNightStandby();
                         if (!deckVisible) webView.loadUrl(authenticatedDeckUrl());
-                    } else if (isNightHours()) {
-                        enterNightStandby(true);
                     } else if (nightStandby) {
                         leaveNightStandby();
                         showOffline();
@@ -482,6 +482,7 @@ public final class MainActivity extends Activity {
 
     private void enterNightStandby(boolean force) {
         if (destroyed || (!force && deckVisible)) return;
+        if (nightStandby) return;
         deckVisible = false;
         nightStandby = true;
         preferences.edit().putBoolean("night_standby", true).apply();
@@ -492,19 +493,19 @@ public final class MainActivity extends Activity {
             webView.pauseTimers();
         }
         setWindowBrightness(0f);
-        runRootCommand("/system/bin/endodeckctl sleep-night --trace");
+        runRootCommand("/system/bin/endodeckctl app-night-sleep --trace");
     }
 
     private void leaveNightStandby() {
         nightStandby = false;
         preferences.edit().putBoolean("night_standby", false).apply();
-        runRootCommand("/system/bin/endodeckctl wake");
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (webView != null) {
             webView.resumeTimers();
             webView.onResume();
         }
         setWindowBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE);
+        runRootCommand("/system/bin/endodeckctl wake");
     }
 
     private void runRootCommand(final String command) {

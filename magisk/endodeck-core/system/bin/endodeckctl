@@ -163,7 +163,7 @@ optional_deviceidle_force() {
 }
 
 night_sleep() {
-    touch "$NIGHT_MARKER"
+    echo module > "$NIGHT_MARKER"
     run_step "disable stay_on_while_plugged_in" 4 "settings put global stay_on_while_plugged_in 0"
     run_step "disable power stayon" 4 "svc power stayon false"
     run_step "set night timeout" 4 "settings put system screen_off_timeout 15000"
@@ -175,6 +175,17 @@ night_sleep() {
     screen_off
     result=$?
     optional_deviceidle_force
+    printf '{"screen":"%s","ok":%s}\n' "$(screen_state_json)" "$([ "$result" = "0" ] && echo true || echo false)"
+    return "$result"
+}
+
+app_night_sleep() {
+    echo app > "$NIGHT_MARKER"
+    run_step "disable stay_on_while_plugged_in" 4 "settings put global stay_on_while_plugged_in 0"
+    run_step "disable power stayon" 4 "svc power stayon false"
+    run_step "set app night timeout" 4 "settings put system screen_off_timeout 15000"
+    screen_off
+    result=$?
     printf '{"screen":"%s","ok":%s}\n' "$(screen_state_json)" "$([ "$result" = "0" ] && echo true || echo false)"
     return "$result"
 }
@@ -201,6 +212,11 @@ case "$1" in
     sleep-night)
         if [ "$2" = "--trace" ]; then trace_start "$@"; fi
         night_sleep
+        exit $?
+        ;;
+    app-night-sleep)
+        if [ "$2" = "--trace" ]; then trace_start "$@"; fi
+        app_night_sleep
         exit $?
         ;;
     screen-off)
@@ -239,7 +255,7 @@ case "$1" in
         printf '{"usb":"%s","night":%s,"screen":"%s","sdk":%s}\n' "$usb" "$night" "$(screen_state_json)" "$(getprop ro.build.version.sdk)"
         ;;
     *)
-        echo "usage: endodeckctl status|diag|wake|sleep|sleep-night [--trace]|screen-off [--trace]|restore" >&2
+        echo "usage: endodeckctl status|diag|wake|sleep|sleep-night [--trace]|app-night-sleep [--trace]|screen-off [--trace]|restore" >&2
         exit 2
         ;;
 esac

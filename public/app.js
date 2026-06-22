@@ -26,6 +26,7 @@ let audioRefreshTimer;
 let inactivityTimer;
 let screensaverTimer;
 let burnInTimer;
+let clockTimer;
 let screensaverActive = false;
 let screensaverMediaVisible = false;
 let lastScreensaverStateUpdateAt = 0;
@@ -39,6 +40,8 @@ let lastShownError = null;
 const nowPlayingAnimationTimers = new WeakMap();
 const actionQueues = new Map();
 let mixerFreezeUntil = 0;
+const deckClockFormatter = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" });
+const forecastDayFormatter = new Intl.DateTimeFormat("pl-PL", { weekday: "short" });
 
 function isPowerConstrainedDevice() {
   if (powerConstrainedDevice !== undefined) return powerConstrainedDevice;
@@ -66,15 +69,7 @@ function markMotionActivity() {
 }
 
 function currentMotionState() {
-  const motion = motionConfig();
-  if (motion.mode === "full") return "full";
-  if (motion.mode === "eco") return "eco";
-  if (!isPowerConstrainedDevice()) return "full";
-  const now = Date.now();
-  const activeMs = Math.max(5, Number(motion.activeSeconds) || 45) * 1000;
-  const ecoMs = Math.max(10, Number(motion.ecoAfterSeconds) || 90) * 1000;
-  const reference = Math.max(screensaverShownAt || 0, lastMotionActivityAt || 0);
-  return reference && now - reference < Math.max(activeMs, ecoMs) ? "full" : "eco";
+  return "full";
 }
 
 function showToast(message, error = false) {
@@ -575,9 +570,9 @@ function renderSystemStats(stats) {
 
 function updateClock() {
   const now = new Date();
-  const main = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(now);
+  const main = deckClockFormatter.format(now);
   $("#clock").textContent = main;
-  if (screensaverActive) updateScreensaverDynamic(screensaver, { config, now, optimizeAnimations: isPowerConstrainedDevice(), motionState: currentMotionState(), clockOnly: true });
+  if (screensaverActive) updateScreensaverDynamic(screensaver, { config, now, optimizeAnimations: false, motionState: currentMotionState(), clockOnly: true });
 }
 
 const weatherLabels = { 0:["SŁONECZNIE","☀"],1:["PRAWIE BEZCHMURNIE","◒"],2:["CZĘŚCIOWE ZACHMURZENIE","◑"],3:["POCHMURNO","☁"],45:["MGŁA","≋"],48:["SZADŹ","≋"],51:["MŻAWKA","⋰"],53:["MŻAWKA","⋰"],55:["MŻAWKA","⋰"],61:["DESZCZ","↯"],63:["DESZCZ","↯"],65:["ULEWA","↯"],71:["ŚNIEG","✦"],73:["ŚNIEG","✦"],75:["ŚNIEŻYCA","✦"],80:["PRZELOTNY DESZCZ","↯"],81:["PRZELOTNY DESZCZ","↯"],82:["ULEWA","↯"],95:["BURZA","ϟ"],96:["BURZA Z GRADEM","ϟ"],99:["BURZA Z GRADEM","ϟ"] };
@@ -587,7 +582,7 @@ function renderWeather(weather) {
   const [label, symbol] = weatherInfo(weather.current.code);
   $("#weather-symbol").textContent = symbol; $("#weather-temp").textContent = `${weather.current.temperature}°`; $("#weather-city").textContent = weather.city;
   $("#weather-description").textContent = `${label} · ODCZUWALNA ${weather.current.apparent}° · WIATR ${weather.current.wind} KM/H`;
-  $("#forecast").innerHTML = weather.daily.map((day) => { const date = new Date(`${day.date}T12:00:00`); const [, daySymbol] = weatherInfo(day.code); return `<div class="forecast-day"><b>${new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date)}</b><span>${daySymbol}</span><strong>${day.max}°</strong><small class="forecast-meta">${day.min}° · ${day.rain}%</small><small class="sun-times"><span>↑ ${shortTime(day.sunrise)}</span><span>↓ ${shortTime(day.sunset)}</span></small></div>`; }).join("");
+  $("#forecast").innerHTML = weather.daily.map((day) => { const date = new Date(`${day.date}T12:00:00`); const [, daySymbol] = weatherInfo(day.code); return `<div class="forecast-day"><b>${forecastDayFormatter.format(date)}</b><span>${daySymbol}</span><strong>${day.max}°</strong><small class="forecast-meta">${day.min}° · ${day.rain}%</small><small class="sun-times"><span>↑ ${shortTime(day.sunrise)}</span><span>↓ ${shortTime(day.sunset)}</span></small></div>`; }).join("");
 }
 
 function cacheAccent(accent) {
@@ -666,9 +661,9 @@ function refreshScreensaver() {
     weather: latestWeather,
     accent: config.accent,
     now: new Date(),
-    optimizeAnimations: isPowerConstrainedDevice(),
+    optimizeAnimations: false,
     motionState: currentMotionState()
-  }, { optimizeAnimations: isPowerConstrainedDevice(), motionState: currentMotionState() });
+  }, { optimizeAnimations: false, motionState: currentMotionState() });
 }
 
 function updateScreensaverLive(extra = {}) {
@@ -682,7 +677,7 @@ function updateScreensaverLive(extra = {}) {
   const currentTrackKey = trackKey();
   const trackChanged = currentTrackKey !== lastScreensaverTrackKey;
   if (trackChanged) markMotionActivity();
-  const includeState = !isPowerConstrainedDevice() || extra.force === true || trackChanged || now - lastScreensaverStateUpdateAt > 5000;
+  const includeState = extra.clockOnly !== true;
   if (!includeState && !extra.clockOnly) return;
   if (includeState) lastScreensaverStateUpdateAt = now;
   lastScreensaverTrackKey = currentTrackKey;
@@ -692,7 +687,7 @@ function updateScreensaverLive(extra = {}) {
     weather: latestWeather,
     accent: config.accent,
     now: new Date(),
-    optimizeAnimations: isPowerConstrainedDevice(),
+    optimizeAnimations: false,
     motionState: currentMotionState(),
     ...extra
   });
@@ -739,13 +734,22 @@ function suppressWakeClick(event) {
   event.stopImmediatePropagation();
 }
 
+function scheduleClockTick() {
+  clearTimeout(clockTimer);
+  const delay = Math.max(80, 1000 - (Date.now() % 1000) + 12);
+  clockTimer = setTimeout(() => {
+    updateClock();
+    scheduleClockTick();
+  }, delay);
+}
+
 async function boot() {
   applyConfig(await fetch("/api/config").then((response) => response.json()), false);
   $("#settings-trigger").innerHTML = iconSvg("gear");
   updateState(await fetch("/api/state").then((response) => response.json())); updateClock(); loadWeather(); resetIdle();
   const events = new EventSource("/api/events"); events.addEventListener("message", (event) => updateState(JSON.parse(event.data)));
   events.addEventListener("config", (event) => applyConfig(JSON.parse(event.data)));
-  setInterval(updateClock, 1000); setInterval(loadWeather, 15 * 60_000); setInterval(syncOfflineBundle, 60_000);
+  scheduleClockTick(); setInterval(loadWeather, 15 * 60_000); setInterval(syncOfflineBundle, 60_000);
   document.addEventListener("pointerdown", wakeFromScreensaver, { capture: true, passive: false });
   document.addEventListener("touchstart", wakeFromScreensaver, { capture: true, passive: false });
   document.addEventListener("click", suppressWakeClick, { capture: true, passive: false });

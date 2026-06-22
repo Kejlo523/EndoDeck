@@ -124,7 +124,7 @@ export class AdbBridge {
     }
   }
 
-  async diagnose(serial) {
+  async diagnose(serial, { checkRoot = false } = {}) {
     const selected = serial || (await this.listDevices()).find((device) => device.state === "device")?.serial;
     if (!selected) return { connected: false, authorized: false, errors: ["Nie znaleziono autoryzowanego telefonu ADB"] };
     const values = await Promise.all([
@@ -133,8 +133,8 @@ export class AdbBridge {
       this.shell(selected, "getprop ro.build.version.release"),
       this.shell(selected, "getprop ro.build.version.sdk"),
       this.shell(selected, "getprop ro.product.cpu.abilist"),
-      this.shell(selected, "su -c id").catch(() => ""),
-      this.shell(selected, "su -c 'magisk -v'").catch(() => ""),
+      checkRoot ? this.shell(selected, "su -c id").catch(() => "") : Promise.resolve(""),
+      checkRoot ? this.shell(selected, "su -c 'magisk -v'").catch(() => "") : Promise.resolve(""),
       this.shell(selected, "dumpsys webviewupdate").catch(() => ""),
       this.shell(selected, "dumpsys package com.google.android.webview | grep versionName | head -n 1").catch(() => ""),
       this.shell(selected, `dumpsys package ${PACKAGE} | grep versionName | head -n 1`).catch(() => "")
@@ -161,15 +161,15 @@ export class AdbBridge {
     device.supported = device.apkInstallable && device.root && device.magiskCompatible && device.webViewCompatible;
     device.errors = [
       ...(device.sdk < 24 || device.sdk > 30 ? ["Wymagany Android 7-11 (API 24-30)"] : []),
-      ...(!device.root ? ["Root przez su jest niedostępny"] : []),
-      ...(!device.magisk ? ["Nie wykryto Magiska"] : !device.magiskCompatible ? ["Wymagany Magisk 22.1 lub nowszy"] : []),
+      ...(checkRoot && !device.root ? ["Root przez su jest niedostępny"] : []),
+      ...(checkRoot && !device.magisk ? ["Nie wykryto Magiska"] : checkRoot && !device.magiskCompatible ? ["Wymagany Magisk 22.1 lub nowszy"] : []),
       ...(!device.webView ? ["Nie wykryto Android System WebView"] : !device.webViewCompatible ? ["Wymagany WebView 119 lub nowszy"] : [])
     ];
     return device;
   }
 
   async pair(serial) {
-    const diagnosis = await this.diagnose(serial);
+    const diagnosis = await this.diagnose(serial, { checkRoot: true });
     if (!diagnosis.supported) throw new Error(diagnosis.errors.join("; ") || "Telefon nie jest zgodny");
     await this.rememberDevice(diagnosis);
     return diagnosis;
@@ -207,12 +207,12 @@ export class AdbBridge {
   }
 
   async installApplication(serial) {
-    const diagnosis = await this.diagnose(serial);
+    const diagnosis = await this.diagnose(serial, { checkRoot: false });
     if (!diagnosis.apkInstallable) throw new Error("Telefon nie obsługuje APK EndoDeck");
     await this.rememberDevice(diagnosis);
     await this.installApk(serial, diagnosis.profile.apkVariant);
     await this.configureConnection(serial);
-    const health = await this.diagnose(serial);
+    const health = await this.diagnose(serial, { checkRoot: false });
     if (!health.installedApk) throw new Error("Nie udało się potwierdzić instalacji APK");
     return health;
   }
@@ -294,10 +294,9 @@ export class AdbBridge {
 
   async configureConnection(serial) {
     await this.run(["-s", serial, "reverse", `tcp:${this.port}`, `tcp:${this.port}`]);
-    await this.syncRuntimeOptions(serial).catch(() => {});
     await this.shell(serial, "settings put system accelerometer_rotation 0");
     await this.shell(serial, "settings put system user_rotation 1");
-    await this.shell(serial, `su -c '/system/bin/endodeckctl wake' >/dev/null 2>&1 || input keyevent 224`).catch(() => {});
+    await this.shell(serial, "input keyevent 224").catch(() => {});
     await this.run(["-s", serial, "shell", "am", "start", "-n", COMPONENT, "--es", "endodeck_token", this.token]);
     this.configuredSerial = serial;
   }

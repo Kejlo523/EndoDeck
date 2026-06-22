@@ -118,7 +118,8 @@ while true; do
         disconnected_at=0
         now=$(date +%s)
         if [ "$last" != night ]; then
-            run_ctl 35 sleep-night --trace
+            marker=$(cat /data/local/tmp/endodeck-night-standby 2>/dev/null)
+            if [ "$marker" = app ]; then run_ctl 20 screen-off --trace; else run_ctl 35 sleep-night --trace; fi
             night_screen_retry_at=$now
             echo "$(date '+%F %T') night standby marker" >> "$LOG"
             last=night

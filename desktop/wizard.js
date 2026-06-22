@@ -34,6 +34,11 @@ function setStudioReady(ready, label = "PRZEJDŹ DO STUDIO") {
   document.body.classList.toggle("ready", ready);
 }
 
+function setAppVersion(version) {
+  const label = $("#app-version");
+  if (label) label.textContent = version || "dev";
+}
+
 function renderCompatibility(device) {
   $("#compatibility").innerHTML = [
     `Android API ${device.sdk || "--"} ${device.sdk >= 24 && device.sdk <= 30 ? "OK" : "WYMAGA 24-30"}`,
@@ -259,11 +264,13 @@ $("#updates").addEventListener("click", async () => {
 
 $("#autostart").addEventListener("change", (event) => api.setAutostart(event.target.checked));
 api.getAutostart().then((state) => { $("#autostart").checked = state.openAtLogin; });
-api.status().then(async ({ state }) => {
+api.status().then(async ({ state, health }) => {
+  setAppVersion(health?.version);
   renderRuntimeState(state);
   const serial = state.serial || state.detectedSerials?.[0] || null;
   if (serial) await scanDevice(serial);
 }).catch((error) => {
+  setAppVersion("offline");
   setChecking(false);
   notify(error.message, true);
 });

@@ -339,7 +339,7 @@ function configureUpdates(config) {
 function registerIpc() {
   ipcMain.handle("runtime-status", async () => ({ state: runtime?.state ?? { adb: false, serial: null }, health: runtime ? await fetch(`http://127.0.0.1:${runtime.port}/api/health`).then((response) => response.json()) : { ok: false, error: "Serwer offline" } }));
   ipcMain.handle("runtime-restart", async () => restartRuntime());
-  ipcMain.handle("device-diagnose", (_, serial) => runtime.adb.diagnose(serial));
+  ipcMain.handle("device-diagnose", (_, serial) => runtime.adb.diagnose(serial, { checkRoot: true }));
   ipcMain.handle("device-pair", (_, serial) => runtime.adb.pair(serial));
   ipcMain.handle("device-install-apk", (_, serial) => runtime.adb.installApplication(serial));
   ipcMain.handle("device-install", (_, request) => runtime.adb.installProfile(request.serial, request.options));

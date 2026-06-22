@@ -24,6 +24,10 @@ const weatherLabels = {
   99: ["BURZA Z GRADEM", "ϟ"]
 };
 
+const dayFormatter = new Intl.DateTimeFormat("pl-PL", { weekday: "short" });
+const dateFormatter = new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+const clockFormatter = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" });
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 }
@@ -44,22 +48,22 @@ function shortTime(value) {
 function formatDay(value) {
   const date = new Date(`${value}T12:00:00`);
   if (Number.isNaN(date.getTime())) return "--";
-  return new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date);
+  return dayFormatter.format(date);
 }
 
 function formatDate(now) {
-  return new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long" }).format(now);
+  return dateFormatter.format(now);
 }
 
 function formatClock(now) {
   return {
-    main: new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(now),
+    main: clockFormatter.format(now),
     seconds: String(now.getSeconds()).padStart(2, "0")
   };
 }
 
 function analogAngles(now) {
-  const seconds = now.getSeconds() + now.getMilliseconds() / 1000;
+  const seconds = now.getSeconds();
   const minutes = now.getMinutes() + seconds / 60;
   const hours = (now.getHours() % 12) + minutes / 60;
   return {
@@ -67,6 +71,15 @@ function analogAngles(now) {
     minute: minutes * 6,
     second: seconds * 6
   };
+}
+
+function continuousSecondAngle(node, angle) {
+  const previous = Number(node.dataset.secondAngle);
+  if (!Number.isFinite(previous)) return angle;
+  let next = angle;
+  while (next < previous - 180) next += 360;
+  while (next > previous + 180) next -= 360;
+  return next;
 }
 
 function dataRateParts(bytes) {
@@ -200,7 +213,10 @@ function applyRootTheme(root, profile, context, options) {
 
 function applyMotionState(root, config, context = {}, options = {}) {
   const motion = getDisplayConfig(config).motion ?? {};
-  const motionState = context.motionState === "eco" || options.motionState === "eco" || motion.mode === "eco" ? "eco" : "full";
+  const requestedMotionState = context.motionState ?? options.motionState;
+  const motionState = requestedMotionState
+    ? requestedMotionState === "eco" ? "eco" : "full"
+    : motion.mode === "eco" ? "eco" : "full";
   const motionKey = `${motionState}:${motion.hideAnalogSecondInEco !== false}:${motion.freezeEqualizerInEco !== false}`;
   if (root.dataset.motionKey === motionKey) return;
   root.classList.toggle("screen-renderer-motion-eco", motionState === "eco");
@@ -515,12 +531,14 @@ export function updateScreensaverDynamic(root, context = {}) {
     const optimize = context.optimizeAnimations === true;
     const lastSync = Number(node.dataset.lastAnalogSync || 0);
     const needsSync = !optimize || !lastSync || now.getTime() - lastSync > 15_000;
-    if (!needsSync) continue;
-    node.dataset.lastAnalogSync = String(now.getTime());
-    const syncSecond = context.syncAnalogSecond === true || !node.style.getPropertyValue("--second-angle");
-    node.style.setProperty("--hour-angle", `${angles.hour}deg`);
-    node.style.setProperty("--minute-angle", `${angles.minute}deg`);
-    if (syncSecond) node.style.setProperty("--second-angle", `${angles.second}deg`);
+    if (needsSync) {
+      node.dataset.lastAnalogSync = String(now.getTime());
+      node.style.setProperty("--hour-angle", `${angles.hour}deg`);
+      node.style.setProperty("--minute-angle", `${angles.minute}deg`);
+    }
+    const secondAngle = continuousSecondAngle(node, angles.second);
+    node.dataset.secondAngle = String(secondAngle);
+    node.style.setProperty("--second-angle", `${secondAngle}deg`);
   }
 
   if (!Object.prototype.hasOwnProperty.call(context, "state")) return;
